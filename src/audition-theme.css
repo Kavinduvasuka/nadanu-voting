@@ -1,0 +1,194 @@
+/* Nadanu 3.0 Audition-inspired public voting theme.
+   Loaded AFTER style.css. No backend changes. */
+:root {--aud-ink:#160c07;--aud-paper:#fff2d3;--aud-orange:#ff6325;--aud-gold:#f5b640;--aud-dim:#c6ac98}
+body {background:#120a06;color:var(--aud-paper)}
+.site-noise {opacity:.20;animation:aud-grain 7s steps(7,end) infinite}
+body::after {content:"";position:fixed;inset:0;z-index:47;pointer-events:none;opacity:.13;background:repeating-linear-gradient(0deg,transparent 0 5px,#000 6px);mix-blend-mode:multiply}
+.topbar {background:#170c08eF;border-bottom-color:#ff63254a;backdrop-filter:blur(14px)}
+.topbar-inner {min-height:88px}
+.topbar .brand img {width:66px;height:66px;filter:drop-shadow(0 1px 18px #ff762544)}
+.topbar .brand strong {font-family:'Bungee',Impact,sans-serif;color:#fff2d3}
+.topbar .brand small {color:var(--aud-orange)}
+.topbar nav a {transition:color .2s,transform .2s}
+.topbar nav a:hover {transform:translateY(-2px);color:var(--aud-orange)}
+.hero {background:radial-gradient(ellipse at 77% 47%,#6b2517 0%,#28140e 47%,#120804 82%);isolation:isolate}
+.hero::before {content:"";position:absolute;inset:0;background:linear-gradient(110deg,#0e0807d9,#190a02b0 58%,#160b05aa),url('/audition-theme/poster-glow.webp') center 35%/cover no-repeat;opacity:.42;z-index:-1;animation:aud-breathe 12s ease-in-out infinite alternate}
+.hero::after {content:"";position:absolute;inset:-25%;z-index:-1;pointer-events:none;background:repeating-conic-gradient(from -10deg at 74% 48%,#ff922600 0deg 15deg,#ff8e1b16 16deg 17deg,#ff922600 18deg 36deg);animation:aud-orbit 100s linear infinite;opacity:.75}
+.hero-grid {min-height:710px}
+.hero-copy {animation:aud-enter .8s ease both}
+.eyebrow {color:var(--aud-gold)}
+.hero-title {line-height:1.02}
+.hero-title .title-top {color:#fff2d3;text-shadow:4px 6px #1b0805}
+.hero-title .title-main {color:var(--aud-orange);text-shadow:5px 6px #681d0b}
+.hero-title em {color:var(--aud-gold)}
+.hero-body {color:#dec2ad;max-width:490px}
+.btn-orange,.vote-button {background:var(--aud-orange);color:#180903}
+.btn-orange:hover:not(:disabled),.vote-button:hover:not(:disabled){background:#ff9657;box-shadow:0 0 25px #ff63255b}
+.btn-outline {border-color:#ffe1ae66}
+.hero-mini {color:#ffd198}
+.hero-mini span {transition:transform .25s,color .25s}.hero-mini span:hover{transform:translateY(-5px);color:var(--aud-orange)}
+.audition-showcase {filter:drop-shadow(0 25px 28px #060302aa);animation:aud-float 6s ease-in-out infinite;transform-origin:center}
+.audition-showcase::before {content:"";position:absolute;inset:10% 11%;transform:rotate(8deg);border:1px solid #ffab5a7a;background:linear-gradient(#2c120430,#180c08a0),url('/audition-theme/poster-glow.webp') center/cover;box-shadow:0 20px 70px #000b}
+.audition-showcase::after {content:"";position:absolute;width:62%;height:52%;z-index:1;opacity:.18;transform:rotate(-7deg);background:url('/audition-theme/audition-logo.png') center/contain no-repeat;pointer-events:none}
+.poster-outline {border-color:#ff83387a;border-style:solid;box-shadow:0 0 35px #ff632526}
+.poster-halo {z-index:2;width:365px;background:radial-gradient(circle at 44% 32%,#ffc568 0%,#fa7428 50%,#a52810 100%);border:13px solid #ff6325;box-shadow:0 0 0 5px #201007,0 0 0 11px #f3ae4e,0 0 80px #ff642c4a;animation:aud-pulse 4.6s ease-in-out infinite}
+.poster-halo::after {content:"";position:absolute;inset:15px;border:1px dashed #62270d;border-radius:50%;animation:aud-orbit 28s linear infinite}
+.poster-halo span {color:#1e0d07;text-shadow:3px 3px #ffe3a75e}
+.poster-rays {color:#ff8f201e;animation:aud-orbit 45s linear infinite}
+.poster-ticket {z-index:3;background:var(--aud-paper);box-shadow:7px 7px #b3411a}
+.poster-stamp {z-index:3;color:var(--aud-gold);border-color:var(--aud-gold)}
+.poster-cut {z-index:3;color:#fdd2a0}
+.ticker {background:var(--aud-orange);border-color:#8c3416}
+.main-vote {position:relative;isolation:isolate}
+.main-vote::before {content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 5% 15%,#6c280e28,transparent 56%),radial-gradient(ellipse at 85% 72%,#ff632516,transparent 55%)}
+.section-heading h2,.how h2,.end-banner h2 {text-shadow:3px 3px #3e170d}
+.section-heading em,.how em,.end-banner em {color:var(--aud-orange)}
+.vote-status.open {background:#431b0c91;box-shadow:0 0 16px #ff63251a}
+.filter.active,.filter:hover{background:var(--aud-orange);border-color:var(--aud-orange)}
+.cards {gap:26px}
+.performer-card{background:#1e100b;border-color:#653321;box-shadow:0 15px 36px #0004;transition:transform .35s,border-color .35s,box-shadow .35s}
+.performer-card:hover{transform:translateY(-9px);border-color:var(--aud-orange);box-shadow:0 20px 45px #fa612519}
+.card-art{background:linear-gradient(#24100750,#19090385),url('/audition-theme/solo-singing.webp') center 31%/cover no-repeat;isolation:isolate}
+.card-art.solo-dancing{background:linear-gradient(#24100750,#19090385),url('/audition-theme/solo-dancing.webp') center 37%/cover no-repeat}
+.card-art.group-dancing{background:linear-gradient(#24100750,#19090385),url('/audition-theme/group-dancing.webp') center 39%/cover no-repeat}
+.card-art::before{z-index:2;pointer-events:none;border:1px solid #ffba5f7a}
+.card-art::after{z-index:0;opacity:.6}
+.card-art img{filter:none;transition:transform .65s ease;z-index:1}
+.performer-card:hover .card-art img{transform:scale(1.065)}
+.card-art .art-letter {position:relative;color:#fbc171dd;text-shadow:4px 5px #451c12cf;z-index:1;animation:aud-float 5s ease-in-out infinite}
+.card-corner{background:var(--aud-orange);color:#140804}
+.card-info h3{color:#fff2d3}
+.how {background:linear-gradient(90deg,#29150e,#170c08)}
+.step b {color:var(--aud-orange)}
+.end-banner{position:relative;overflow:hidden;background:radial-gradient(ellipse at center,#75250f,#291007 72%,#140804)}
+.end-banner::before {content:"";position:absolute;inset:0;opacity:.18;background:url('/audition-theme/poster-glow.webp') center 46%/cover no-repeat;animation:aud-breathe 9s alternate infinite}
+.end-banner>.wrap{position:relative}
+.vote-modal{border-color:var(--aud-orange);background:#20100b;box-shadow:0 24px 90px #000c}
+.vote-modal::backdrop{background:#050202dc;backdrop-filter:blur(6px)}
+@keyframes aud-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-13px)}}
+@keyframes aud-pulse{0%,100%{box-shadow:0 0 0 5px #201007,0 0 0 11px #f3ae4e,0 0 55px #ff642c32}50%{box-shadow:0 0 0 5px #201007,0 0 0 11px #f3ae4e,0 0 115px #ff642c76}}
+@keyframes aud-orbit{to{rotate:360deg}}
+@keyframes aud-breathe{0%{transform:scale(1);opacity:.32}100%{transform:scale(1.06);opacity:.56}}
+@keyframes aud-enter{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
+@keyframes aud-grain{0%,100%{transform:translate(0)}12%{transform:translate(-1%,1%)}37%{transform:translate(1%,-1%)}65%{transform:translate(-1%,-1%)}}
+@media(max-width:700px){.hero-grid{min-height:unset}.audition-showcase{height:380px}.poster-halo{width:225px}.topbar nav a{display:inline!important;font-size:9px}.topbar nav{gap:15px}.topbar nav a.admin-link{display:none!important}.topbar .brand img{width:48px;height:48px}.hero-title .title-top,.hero-title .title-main{font-size:clamp(42px,10vw,70px)}.cards{gap:18px}}
+@media(prefers-reduced-motion:reduce){.site-noise,.hero::before,.hero::after,.audition-showcase,.poster-halo,.poster-halo::after,.poster-rays,.card-art .art-letter,.end-banner::before{animation:none!important}.performer-card,.card-art img{transition:none!important}html{scroll-behavior:auto}}
+
+/* Nadanu 3.0 official header logo */
+.topbar .brand img {
+    width: 85px;
+    height: 98px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 12px rgba(255,130,20,.35));
+}
+
+.topbar-inner {
+    min-height: 112px;
+}
+
+@media (max-width: 700px) {
+    .topbar .brand img {
+        width: 60px;
+        height: 70px;
+    }
+
+    .topbar-inner {
+        min-height: 84px;
+    }
+}
+
+/* ==========================================
+   NADANU 3.0 OFFICIAL HEADER
+   ========================================== */
+
+.nadanu-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.nadanu-brand-logo {
+  width: 98px;
+  height: 108px;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 10px rgba(255, 128, 30, 0.25));
+}
+
+.nadanu-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  line-height: 1.15;
+}
+
+.nadanu-brand-title {
+  display: block;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.7px;
+  color: #fff1dc;
+  white-space: nowrap;
+  text-transform: none;
+}
+
+.nadanu-brand-title span {
+  color: #ff692b;
+}
+
+.nadanu-brand-subtitle {
+  display: block;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  color: #cbb8aa;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.topbar-inner {
+  min-height: 118px;
+}
+
+@media (max-width: 700px) {
+  .nadanu-brand {
+    gap: 9px;
+  }
+
+  .nadanu-brand-logo {
+    width: 64px;
+    height: 75px;
+  }
+
+  .nadanu-brand-title {
+    font-size: 20px;
+    letter-spacing: -0.4px;
+  }
+
+  .nadanu-brand-subtitle {
+    font-size: 10px;
+  }
+
+  .topbar-inner {
+    min-height: 88px;
+  }
+}
+
+@media (max-width: 390px) {
+  .nadanu-brand-logo {
+    width: 52px;
+    height: 64px;
+  }
+
+  .nadanu-brand-title {
+    font-size: 17px;
+  }
+
+  .nadanu-brand-subtitle {
+    font-size: 9px;
+  }
+}
+

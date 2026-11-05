@@ -1,0 +1,55 @@
+/* ===========================================
+   NADANU 3.0 — ANIMATED CONCERT ATMOSPHERE
+   CSS-only, GPU-friendly, no external assets.
+   =========================================== */
+body { isolation: isolate; }
+.concert-atmosphere {
+  position: fixed; inset: 0; overflow: hidden; pointer-events: none;
+  z-index: -1; background: radial-gradient(ellipse at 50% 80%, #3b180e 0%, #160c07 58%, #0e0705 100%);
+}
+#landing { position: relative; z-index: 1; }
+.light-beam {
+  position: absolute; top: -22vh; width: 38vw; height: 135vh;
+  opacity: .20; transform-origin: 50% 0%; filter: blur(14px);
+  background: linear-gradient(to bottom, #ffae584f 0%, #ff6b2b19 44%, transparent 88%);
+  clip-path: polygon(48% 0, 52% 0, 100% 100%, 0 100%);
+  animation: spotlight-sway 13s ease-in-out infinite alternate;
+}
+.beam-left { left: 3%; transform: rotate(-24deg); }
+.beam-right { right: 3%; animation-delay: -6s; animation-direction: alternate-reverse; }
+.ambient-orb { position: absolute; border-radius: 50%; filter: blur(75px); opacity: .24; animation: ambient-float 17s ease-in-out infinite alternate; }
+.orb-one { width: 420px; height: 420px; top: 12%; left: -170px; background: #ff6126; }
+.orb-two { width: 470px; height: 470px; right: -180px; bottom: 5%; background: #ad3d67; animation-delay: -8s; }
+.retro-grid {
+  position: absolute; left: -40%; right: -40%; bottom: -34%; height: 72%;
+  transform: perspective(500px) rotateX(68deg);
+  background-image: linear-gradient(#ff93441c 1px, transparent 1px), linear-gradient(90deg, #ff93441c 1px, transparent 1px);
+  background-size: 62px 62px;
+  mask-image: linear-gradient(to bottom, transparent, black 45%, transparent);
+  animation: grid-drift 18s linear infinite;
+}
+.music-sparks { position: absolute; inset: 0; opacity: .38;
+  background-image: radial-gradient(circle, #ffd08d 1px, transparent 2px), radial-gradient(circle, #ff7e3e 1px, transparent 2px);
+  background-size: 137px 179px, 193px 223px; background-position: 12px 45px, 84px 12px;
+  animation: sparks-drift 32s linear infinite;
+}
+@keyframes spotlight-sway { from { transform: rotate(-28deg); opacity: .13; } to { transform: rotate(21deg); opacity: .28; } }
+@keyframes ambient-float { from { transform: translate(0,0) scale(1); } to { transform: translate(70px,-65px) scale(1.2); } }
+@keyframes grid-drift { from { background-position: 0 0, 0 0; } to { background-position: 0 62px, 62px 0; } }
+@keyframes sparks-drift { from { background-position: 12px 45px, 84px 12px; } to { background-position: 12px -240px, 84px -320px; } }
+
+
+/* Adapt concert backdrop to the Nadanu public voting layout. */
+body { background:#160c07; }
+#app { position:relative; isolation:isolate; min-height:100vh; }
+#app > .concert-atmosphere { position:fixed; inset:0; z-index:0; pointer-events:none; }
+#app > .site-noise { z-index:2; pointer-events:none; }
+#app > .topbar, #app > main, #app > footer { position:relative; z-index:1; }
+#app > .vote-modal { z-index:100; }
+.hero { background:radial-gradient(ellipse at 76% 34%,#70301f32,transparent 70%) !important; }
+.main-vote { background:transparent !important; }
+.how { background:linear-gradient(90deg,#29150ee0,#170c08dc) !important; }
+.end-banner { background:radial-gradient(ellipse at 50% 40%,#8c341a81,#1d0d09b5) !important; }
+.concert-atmosphere .light-beam, .concert-atmosphere .ambient-orb, .concert-atmosphere .retro-grid, .concert-atmosphere .music-sparks {pointer-events:none;}
+@media(max-width:620px) { .concert-atmosphere .light-beam{width:75vw;opacity:.12}.concert-atmosphere .ambient-orb{opacity:.16} }
+@media(prefers-reduced-motion:reduce) { .concert-atmosphere * { animation:none!important; } }
