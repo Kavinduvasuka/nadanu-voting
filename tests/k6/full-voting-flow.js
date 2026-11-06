@@ -40,7 +40,7 @@ export const options = {
     }
   },
   thresholds: {
-    http_req_failed: ['rate<0.60'], // Expected duplicate rejections are HTTP 409; use checks for correctness.
+    http_req_failed: ['rate<0.01'], // The duplicate request explicitly treats HTTP 409 as expected.
     checks: ['rate>0.95'],
     vote_submit_ms: ['p(95)<3000'],
   },
@@ -118,6 +118,7 @@ export default function () {
   // Expected rejection is NOT a failure of the voting system.
   const duplicate = http.post(`${url}/functions/v1/cast-vote`, payload, {
     ...params,
+    responseCallback: http.expectedStatuses(409),
     tags: {step: 'duplicate_vote'}
   });
   if (check(duplicate, {
