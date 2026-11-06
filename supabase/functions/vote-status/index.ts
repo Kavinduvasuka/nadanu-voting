@@ -41,15 +41,21 @@ Deno.serve(async req => {
     const authorization = req.headers.get('authorization') || '';
     if (!authorization.startsWith('Bearer ')) return respond(origin, 401, { error: 'Session required.' });
     const { data: { user }, error: authError } = await admin.auth.getUser(authorization.slice(7));
-    if (authError || !user?.is_anonymous) return respond(origin, 401, { error: 'Anonymous session required.' });
+    if (authError || !user) return respond(origin, 401, { error: 'Valid session required.' });
     const body = await req.json();
     if (typeof body.device_id !== 'string' || body.device_id.length < 20 || body.device_id.length > 200) {
       return respond(origin, 400, { error: 'Invalid device identifier.' });
     }
     const hashed = await deviceHash(body.device_id);
     // Read only. A reset of this vote immediately changes the result on the next check.
+    // An authenticated session can only check the browser identifier it supplies.
+    // Anonymous voters are additionally checked by their verified Auth user ID.
+    // This works even when the same browser is currently signed in as an organizer.
+    const filter = user.is_anonymous
+      ? `voter_id.eq.${user.id},device_hash.eq.${hashed}`
+      : `device_hash.eq.${hashed}`;
     const { data, error } = await admin.from('votes').select('id')
-      .or(`voter_id.eq.${user.id},device_hash.eq.${hashed}`).limit(1);
+      .or(filter).limit(1);
     if (error) {
       console.error('vote-status query failed:', error.code);
       return respond(origin, 503, { error: 'Voting status unavailable.' });
