@@ -31,6 +31,20 @@ if (__ENV.CONFIRM_STAGING_ONLY !== 'YES' ||
 const successful = new Counter('successful_new_votes');
 const duplicates = new Counter('correct_duplicate_rejections');
 const votingLatency = new Trend('voting_latency_ms', true);
+const timingAuth = new Trend('server_auth_ms', true);
+const timingTurnstile = new Trend('server_turnstile_ms', true);
+const timingAtomic = new Trend('server_atomic_vote_ms', true);
+const timingTotal = new Trend('server_total_ms', true);
+const timingMetrics = {auth:timingAuth,turnstile:timingTurnstile,atomic_vote:timingAtomic,total:timingTotal};
+
+function captureTimings(res) {
+  const value = res.headers['Server-Timing'] || res.headers['server-timing'] || '';
+  for (const match of String(value).matchAll(/([a-z_]+);dur=([0-9.]+)/g)) {
+    const metric = timingMetrics[match[1]];
+    const ms = Number(match[2]);
+    if (metric && Number.isFinite(ms)) metric.add(ms);
+  }
+}
 
 export const options={
   scenarios:{
@@ -57,6 +71,7 @@ export default function(){
   };
   const res=http.post(`${url}/functions/v1/cast-vote`,body,params);
   votingLatency.add(res.timings.duration);
+  captureTimings(res);
   const ok=check(res,{
     'new vote HTTP 200':r=>r.status===200,
     'new vote recorded':r=>data(r)?.ok===true
