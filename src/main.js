@@ -1,5 +1,20 @@
 import './concert-atmosphere.css';
 import { supabase, configured, CATS, placeholders, logo, footer, safe, setNotice, turnstileSiteKey, getBrowserToken } from './shared.js';
+const VOTE_FLAG_KEY = 'nadanu_vote_cast';
+let alreadyVoted = localStorage.getItem(VOTE_FLAG_KEY) === '1';
+function markAlreadyVoted() {
+  alreadyVoted = true;
+  localStorage.setItem(VOTE_FLAG_KEY, '1');
+  render();
+  setNotice('ALREADY VOTED — YOUR ONE VOTE HAS BEEN RECORDED. THANK YOU!', 'success');
+}
+window.addEventListener('storage', e => {
+  if (e.key === VOTE_FLAG_KEY) {
+    alreadyVoted = e.newValue === '1';
+    render();
+    if (alreadyVoted) setNotice('ALREADY VOTED — YOUR ONE VOTE HAS BEEN RECORDED.', 'success');
+  }
+});
 let selected = 'all', contestants = [], votingEvent=null, busy=false, turnstileToken=null, widgetId=null;
 const app=document.getElementById('app');
 app.innerHTML=`<div class="concert-atmosphere" aria-hidden="true"><div class="light-beam beam-left"></div><div class="light-beam beam-right"></div><div class="ambient-orb orb-one"></div><div class="ambient-orb orb-two"></div><div class="retro-grid"></div><div class="music-sparks"></div></div><div class="site-noise"></div><header class="topbar"><div class="wrap topbar-inner">${logo()}<nav><a class="nav-active" href="#performers">THE FINALISTS</a><a href="#how">HOW TO VOTE</a></nav><button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">☰</button></div></header>
@@ -9,14 +24,14 @@ app.innerHTML=`<div class="concert-atmosphere" aria-hidden="true"><div class="li
 <dialog class="vote-modal" id="vote-modal"><button class="modal-x" id="close-modal" aria-label="Close">✕</button><div class="tiny-label">✦ OFFICIAL PEOPLE'S CHOICE VOTE</div><h2>MAKE IT <em>COUNT.</em></h2><p id="modal-desc"></p><p class="warn">You may cast only one vote total. This choice is final.</p><div id="turnstile" class="turnstile"></div><button class="btn btn-orange modal-submit" id="submit-vote">CONFIRM MY VOTE ↗</button><p class="modal-feedback" id="modal-feedback" role="status"></p></dialog>`;
 
 function status(){const el=document.getElementById('vote-status');let label='PREVIEW MODE';let cls='closed';if(configured){if(votingEvent?.status==='open' && (!votingEvent.starts_at || new Date(votingEvent.starts_at)<=new Date()) && (!votingEvent.ends_at || new Date(votingEvent.ends_at)>new Date())){label='VOTING OPEN';cls='open'}else if(votingEvent?.status==='closed'){label='VOTING CLOSED'}else label='VOTING NOT OPEN';}el.className=`vote-status ${cls}`;el.innerHTML=`<span class="live-dot"></span> ${label}`;}
-function cardMarkup(c,i){const cat=CATS.find(x=>x.slug===c.category_slug);let disabled= !configured || !votingEvent || votingEvent.status!=='open' || (votingEvent.starts_at && new Date(votingEvent.starts_at)>new Date()) || (votingEvent.ends_at && new Date(votingEvent.ends_at)<new Date()) || c.demo;
-return `<article class="performer-card"><div class="card-art ${cat?.slug||''}">${c.image_url?`<img src="${safe(c.image_url)}" alt="Photo of ${safe(c.name)}" loading="lazy" onerror="this.remove()"/>`: `<div class="art-letter">${cat?.symbol||'★'}</div>`}<div class="card-corner">${safe(cat?.name||'FINALIST')}</div><div class="card-index">#${String(c.sort_order||i+1).padStart(2,'0')}</div><div class="art-mark">N<span>3.0</span></div></div><div class="card-info"><span class="card-label">THE FINALISTS / ${safe(cat?.num||'00')}</span><h3>${safe(c.name)}</h3><p class="card-stage">${safe(c.stage_name||c.performance_title||cat?.sub||'')}</p><div class="card-bottom"><span>${safe(c.performance_title||cat?.name||'NADANU 3.0')}</span><button class="vote-button" data-vote="${safe(c.id)}" ${disabled?'disabled':''}>${disabled?'NOT OPEN YET':'VOTE NOW'} <span>↗</span></button></div></div></article>`}
+function cardMarkup(c,i){const cat=CATS.find(x=>x.slug===c.category_slug);let disabled= alreadyVoted || !configured || !votingEvent || votingEvent.status!=='open' || (votingEvent.starts_at && new Date(votingEvent.starts_at)>new Date()) || (votingEvent.ends_at && new Date(votingEvent.ends_at)<new Date()) || c.demo;
+return `<article class="performer-card"><div class="card-art ${cat?.slug||''}">${c.image_url?`<img src="${safe(c.image_url)}" alt="Photo of ${safe(c.name)}" loading="lazy" onerror="this.remove()"/>`: `<div class="art-letter">${cat?.symbol||'★'}</div>`}<div class="card-corner">${safe(cat?.name||'FINALIST')}</div><div class="card-index">#${String(c.sort_order||i+1).padStart(2,'0')}</div><div class="art-mark">N<span>3.0</span></div></div><div class="card-info"><span class="card-label">THE FINALISTS / ${safe(cat?.num||'00')}</span><h3>${safe(c.name)}</h3><p class="card-stage">${safe(c.stage_name||c.performance_title||cat?.sub||'')}</p><div class="card-bottom"><span>${safe(c.performance_title||cat?.name||'NADANU 3.0')}</span><button class="vote-button" data-vote="${safe(c.id)}" ${disabled?'disabled':''}>${alreadyVoted?'ALREADY VOTED':disabled?'NOT OPEN YET':'VOTE NOW'} <span>↗</span></button></div></div></article>`}
 function render(){const data=selected==='all'?contestants:contestants.filter(c=>c.category_slug===selected);document.getElementById('cards').innerHTML=data.length?data.map(cardMarkup).join(''):'<div class="empty">NO FINALISTS ADDED TO THIS CATEGORY YET.<br/><small>ORGANIZERS WILL ADD THEM SOON.</small></div>';status()}
 document.getElementById('filters').addEventListener('click',e=>{const btn=e.target.closest('[data-cat]');if(!btn)return;selected=btn.dataset.cat;document.querySelectorAll('.filter').forEach(x=>x.classList.toggle('active',x===btn));render()});
 document.getElementById('cards').addEventListener('click',e=>{const btn=e.target.closest('[data-vote]');if(!btn||btn.disabled)return;const c=contestants.find(x=>x.id===btn.dataset.vote);if(c)openVote(c)});
 document.getElementById('menu-toggle').onclick=()=>document.querySelector('nav').classList.toggle('open');
 let candidate=null;
-function openVote(c){candidate=c;turnstileToken=null;document.getElementById('modal-feedback').textContent='';document.getElementById('modal-desc').innerHTML=`You are voting for <strong>${safe(c.name)}</strong>.`;const target=document.getElementById('turnstile');target.innerHTML='';widgetId=null;if(turnstileSiteKey && !/REPLACE|YOUR_/i.test(turnstileSiteKey)){if(window.turnstile){widgetId=window.turnstile.render(target,{sitekey:turnstileSiteKey,callback:t=>turnstileToken=t,'expired-callback':()=>turnstileToken=null})}else target.textContent='Security widget is loading. Please close and retry.';}else target.textContent='Turnstile is not configured yet. Voting is not available.';document.getElementById('vote-modal').showModal();}
+function openVote(c){if(alreadyVoted){setNotice('ALREADY VOTED — YOU CANNOT VOTE AGAIN.', 'success');return;}candidate=c;turnstileToken=null;document.getElementById('modal-feedback').textContent='';document.getElementById('modal-desc').innerHTML=`You are voting for <strong>${safe(c.name)}</strong>.`;const target=document.getElementById('turnstile');target.innerHTML='';widgetId=null;if(turnstileSiteKey && !/REPLACE|YOUR_/i.test(turnstileSiteKey)){if(window.turnstile){widgetId=window.turnstile.render(target,{sitekey:turnstileSiteKey,callback:t=>turnstileToken=t,'expired-callback':()=>turnstileToken=null})}else target.textContent='Security widget is loading. Please close and retry.';}else target.textContent='Turnstile is not configured yet. Voting is not available.';document.getElementById('vote-modal').showModal();}
 document.getElementById('close-modal').onclick=()=>document.getElementById('vote-modal').close();
 document.getElementById('vote-modal').addEventListener('close',()=>{if(widgetId!==null&&window.turnstile)try{window.turnstile.remove(widgetId)}catch{}widgetId=null});
 // A public vote must use an anonymous Supabase Auth identity, never the organizer login.
@@ -60,7 +75,7 @@ async function functionErrorMessage(error, data) {
 }
 
 document.getElementById('submit-vote').onclick = async () => {
-  if (busy || !candidate) return;
+  if (busy || !candidate || alreadyVoted) return;
   const out = document.getElementById('modal-feedback');
   if (!configured || !supabase) {
     out.textContent = 'Supabase is not configured.';
@@ -91,11 +106,17 @@ document.getElementById('submit-vote').onclick = async () => {
     if (error) throw new Error(await functionErrorMessage(error, data));
     if (data?.error) throw new Error(data.error);
 
-    localStorage.setItem('nadanu_vote_cast', '1');
+    markAlreadyVoted();
     document.getElementById('vote-modal').close();
     setNotice('YOUR VOTE IS IN! THANK YOU FOR SUPPORTING NADANU 3.0.', 'success');
   } catch (err) {
-    out.textContent = err?.message || 'Unable to cast vote. Please try again.';
+    const message = err?.message || 'Unable to cast vote. Please try again.';
+    if (/already been recorded|already voted|duplicate/i.test(message)) {
+      markAlreadyVoted();
+      document.getElementById('vote-modal').close();
+      return;
+    }
+    out.textContent = message;
     if (window.turnstile && widgetId !== null) {
       try { window.turnstile.reset(widgetId); } catch { /* Widget may already be gone. */ }
     }
@@ -119,6 +140,7 @@ function renderBootstrap(payload){
   if(!contestants.length)setNotice('THE STAGE IS BEING SET. FINALISTS WILL APPEAR HERE ONCE ADDED BY THE ORGANIZERS.');
   if(votingEvent?.status!=='open')setNotice('VOTING IS NOT OPEN YET. EXPLORE THE FINALISTS BELOW.');
   render();
+  if (alreadyVoted) setNotice('ALREADY VOTED — YOUR ONE VOTE HAS BEEN RECORDED. THANK YOU!', 'success');
 }
 async function loadBootstrap(){
   // New RPC fetches categories, active contestants and event status in one HTTP request.
