@@ -150,6 +150,20 @@ root.innerHTML = `
       <div id="finalists" class="finalist-list"></div>
     </div>
 
+    <div class="admin-panel" id="edit-panel" hidden>
+      <div class="tiny-label">EDIT FINALIST</div>
+      <form id="edit-form">
+        <input id="edit-id" type="hidden"/>
+        <label>CATEGORY<select id="edit-category" required></select></label>
+        <label>PERFORMER / TEAM NAME<input id="edit-name" maxlength="120" required/></label>
+        <label>STAGE NAME / SUBTITLE<input id="edit-stage-name" maxlength="140"/></label>
+        <label>PERFORMANCE TITLE<input id="edit-performance-title" maxlength="160"/></label>
+        <label>PHOTO URL<input id="edit-image-url" type="url"/></label>
+        <label>DISPLAY ORDER<input id="edit-sort-order" type="number" min="0" required/></label>
+        <button class="btn btn-orange" type="submit">SAVE CHANGES</button>
+        <button class="btn btn-outline" id="cancel-edit" type="button">CANCEL</button>
+      </form>
+    </div>
     <div class="admin-panel">
       <div class="tiny-label">VOTE RESULTS</div>
       <p>
@@ -162,6 +176,20 @@ root.innerHTML = `
         REFRESH RESULTS ↻
       </button>
     </div>
+    <div class="admin-panel">
+      <div class="tiny-label">VOTER DEVICE RECORDS</div>
+      <p>These device references are anonymous hashes, not phone names. Select a vote using its finalist, timestamp and reference. Resetting ONE vote requires admin credentials and is audited.</p>
+      <button class="btn btn-outline" id="load-votes" type="button">LOAD VOTER RECORDS ↻</button>
+      <div id="voter-records" class="finalist-list"></div>
+      <form id="reset-form" hidden>
+        <input id="reset-vote-id" type="hidden"/>
+        <p id="reset-selection"></p>
+        <label>ADMIN EMAIL<input id="reset-email" type="email" required autocomplete="username"/></label>
+        <label>ADMIN PASSWORD<input id="reset-password" type="password" required autocomplete="current-password"/></label>
+        <button class="btn btn-orange" id="confirm-reset" type="submit">VERIFY ADMIN & RESET SELECTED VOTE</button>
+        <button class="btn btn-outline" id="cancel-reset" type="button">CANCEL</button>
+      </form>
+    </div>
   </section>
 </main>
 
@@ -172,6 +200,8 @@ ${footer()}
 // HELPERS
 // ========================================
 
+let contestantCache = [];
+let voteCache = [];
 function showDash(on) {
   document.getElementById('login').hidden = on;
   document.getElementById('dashboard').hidden = !on;
@@ -231,7 +261,7 @@ async function load() {
       .from('contestants')
       .select(
         'id,name,stage_name,performance_title,' +
-        'sort_order,active,category_id'
+        'image_url,sort_order,active,category_id'
       )
       .order('sort_order'),
 
@@ -250,6 +280,8 @@ async function load() {
     );
   }
 
+  contestantCache = contestants || [];
+  document.getElementById("edit-category").innerHTML = (cats || []).map(c => `<option value="${safe(c.id)}">${safe(c.name)}</option>`).join("");
   const byId = new Map(
     (cats || []).map(c => [c.id, c.name])
   );
@@ -284,6 +316,7 @@ async function load() {
           </div>
 
           <div class="finalist-actions">
+            <button data-edit="${safe(c.id)}" class="small-btn">EDIT</button>
             <button
               data-toggle="${safe(c.id)}"
               data-state="${c.active}"
@@ -524,10 +557,24 @@ if (!configured) {
   document.getElementById('finalists').onclick =
     async e => {
       const t = e.target.closest(
-        '[data-delete],[data-toggle]'
+        '[data-edit],[data-delete],[data-toggle]'
       );
 
       if (!t) return;
+      if (t.dataset.edit) {
+        const c = contestantCache.find(x => x.id === t.dataset.edit);
+        if (!c) return;
+        const fields = {
+          'edit-id': c.id, 'edit-category': c.category_id,
+          'edit-name': c.name, 'edit-stage-name': c.stage_name || '',
+          'edit-performance-title': c.performance_title || '',
+          'edit-image-url': c.image_url || '', 'edit-sort-order': c.sort_order
+        };
+        for (const [id,v] of Object.entries(fields)) document.getElementById(id).value = v;
+        document.getElementById('edit-panel').hidden = false;
+        document.getElementById('edit-panel').scrollIntoView({behavior:'smooth'});
+        return;
+      }
 
       try {
         if (!(await authorized())) {
@@ -564,6 +611,67 @@ if (!configured) {
         setNotice(err.message, 'error');
       }
     };
+
+
+  // Edit a finalist without deleting its votes.
+  document.getElementById('cancel-edit').onclick = () => {
+    document.getElementById('edit-panel').hidden = true;
+  };
+  document.getElementById('edit-form').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      if (!await authorized()) throw Error('Admin session expired. Sign in again.');
+      const {data,error} = await supabase.from('contestants').update({
+        category_id:value('edit-category'), name:value('edit-name'),
+        stage_name:value('edit-stage-name'), performance_title:value('edit-performance-title'),
+        image_url:value('edit-image-url')||null, sort_order:Number(value('edit-sort-order'))
+      }).eq('id',value('edit-id')).select('id').maybeSingle();
+      if(error)throw error;
+      if(!data)throw Error('Finalist was not updated. Check admin access.');
+      document.getElementById('edit-panel').hidden=true;
+      await load();setNotice('Finalist updated successfully.','success');
+    } catch(err){setNotice(err.message,'error');}
+  };
+
+  async function refreshVoterRecords(){
+    if(!await authorized())throw Error('Admin session expired.');
+    const {data,error}=await supabase.rpc('admin_list_voter_records');
+    if(error)throw error;
+    voteCache=data||[];
+    document.getElementById('voter-records').innerHTML=voteCache.length
+      ?voteCache.map(v=>`<div class="finalist-row"><div><strong>${safe(v.finalist_name)}</strong><small>${safe(new Date(v.voted_at).toLocaleString())} · Device ref: ${safe(v.device_reference)}</small></div><button class="small-btn danger" type="button" data-reset="${safe(v.vote_id)}">RESET VOTE</button></div>`).join('')
+      :'<p>No votes recorded.</p>';
+  }
+  document.getElementById('load-votes').onclick=()=>refreshVoterRecords().catch(err=>setNotice(err.message,'error'));
+  document.getElementById('voter-records').onclick=e=>{
+    const b=e.target.closest('[data-reset]');if(!b)return;
+    const v=voteCache.find(x=>x.vote_id===b.dataset.reset);if(!v)return;
+    document.getElementById('reset-vote-id').value=v.vote_id;
+    document.getElementById('reset-selection').textContent='Selected: '+v.finalist_name+' · '+new Date(v.voted_at).toLocaleString()+' · '+v.device_reference;
+    document.getElementById('reset-password').value='';
+    document.getElementById('reset-form').hidden=false;
+  };
+  document.getElementById('cancel-reset').onclick=()=>{
+    document.getElementById('reset-password').value='';
+    document.getElementById('reset-form').hidden=true;
+  };
+  document.getElementById('reset-form').onsubmit=async e=>{
+    e.preventDefault();
+    const vote_id=value('reset-vote-id');
+    if(!voteCache.some(v=>v.vote_id===vote_id)){setNotice('Invalid selected vote.','error');return;}
+    if(!confirm('Permanently reset only the selected vote? This allows the browser/session to vote again and is audit logged.'))return;
+    const btn=document.getElementById('confirm-reset');btn.disabled=true;
+    try{
+      if(!await authorized())throw Error('Admin session expired.');
+      const {data,error}=await supabase.functions.invoke('admin-reset-vote',{body:{vote_id,email:value('reset-email'),password:value('reset-password')}});
+      if(error){let msg=error.message;try{msg=(await error.context?.json())?.error||msg;}catch{}throw Error(msg);}
+      if(!data?.ok)throw Error(data?.error||'Reset was not confirmed.');
+      document.getElementById('reset-form').hidden=true;
+      await load();await refreshVoterRecords();
+      setNotice('Selected vote reset. Audit log updated.','success');
+    }catch(err){setNotice('Vote reset failed: '+err.message,'error');}
+    finally{btn.disabled=false;document.getElementById('reset-password').value='';}
+  };
 
   // ========================================
   // REFRESH RESULTS
