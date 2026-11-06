@@ -108,3 +108,7 @@ For `admin.html`, `vite.config.js` uses a Rollup multi-page input; see file.
 **No finalists**: Use the admin dashboard to add them; this is not a database connection failure.
 
 **Admin cannot sign in**: Ensure the organizer exists in Auth Users and the correct UUID is in `admin_roles`.
+
+## GitHub Pages deployment note
+
+The site is served from the committed `docs/` directory. A source-only change under `src/` does not update the public pages until Vite is rebuilt with the production environment and the generated `dist/` contents are copied into `docs/` and committed. If the Pages `build` job succeeds but `deploy` fails, inspect the failed deployment job or rerun its failed job before changing voting logic.
