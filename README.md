@@ -112,3 +112,12 @@ For `admin.html`, `vite.config.js` uses a Rollup multi-page input; see file.
 ## GitHub Pages deployment note
 
 The site is served from the committed `docs/` directory. A source-only change under `src/` does not update the public pages until Vite is rebuilt with the production environment and the generated `dist/` contents are copied into `docs/` and committed. If the Pages `build` job succeeds but `deploy` fails, inspect the failed deployment job or rerun its failed job before changing voting logic.
+
+## Direct finalist image upload (Admin)
+
+The organizer dashboard supports **Choose Image → Save Finalist** and replacing an existing photo via **EDIT**.
+Accepted formats: JPG, PNG, WebP; maximum size: **5 MB**. After a successful upload the public photo URL is saved with the finalist record. The older optional external photo URL input remains available.
+
+Storage uses the **public** Supabase bucket `nadanu-finalists`, with `storage.objects` INSERT and DELETE policies restricted to logged-in admins via `public.is_voting_admin()`. Public images can be viewed by voting visitors but uploads are not public. The bucket and policies must exist in the same Supabase project as the website.
+
+To publish frontend changes: rebuild Vite with the production `.env` and `VITE_BASE_PATH=/nadanu-voting/`, copy `dist/*` into `docs/`, then commit and push `docs/`. Source updates alone do not publish to GitHub Pages.
