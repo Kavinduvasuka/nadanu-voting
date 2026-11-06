@@ -10,6 +10,12 @@ const url = __ENV.STAGING_SUPABASE_URL || '';
 const key = __ENV.STAGING_PUBLISHABLE_KEY || '';
 const contestant = __ENV.STAGING_CONTESTANT_ID || '';
 const vus = Number(__ENV.TEST_VUS || 5);
+// Optional regional A/B test: Sydney is the staging database region.
+// Leave unset to measure automatic function routing.
+const voteFunctionRegion = __ENV.TEST_FUNCTION_REGION || '';
+if (voteFunctionRegion && voteFunctionRegion !== 'ap-southeast-2') {
+  throw new Error('TEST_FUNCTION_REGION must be empty or ap-southeast-2');
+}
 const now = Math.floor(Date.now()/1000);
 const sessions = new SharedArray('staging sessions', () => {
   const d=JSON.parse(open('./.local/staging-sessions.json'));
@@ -69,7 +75,8 @@ export default function(){
     timeout:'20s',
     tags:{step:'cast_vote'}
   };
-  const res=http.post(`${url}/functions/v1/cast-vote`,body,params);
+  const endpoint = `${url}/functions/v1/cast-vote${voteFunctionRegion ? '?forceFunctionRegion=ap-southeast-2' : ''}`;
+  const res=http.post(endpoint,body,params);
   votingLatency.add(res.timings.duration);
   captureTimings(res);
   const ok=check(res,{
@@ -82,7 +89,7 @@ export default function(){
   }
   successful.add(1);
   sleep(0.1);
-  const second=http.post(`${url}/functions/v1/cast-vote`,body,{
+  const second=http.post(endpoint,body,{
     ...params,
     tags:{step:'duplicate_vote'},
     responseCallback:http.expectedStatuses(409)
