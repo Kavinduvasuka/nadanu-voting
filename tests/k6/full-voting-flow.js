@@ -25,6 +25,22 @@ if (__ENV.CONFIRM_STAGING_ONLY !== 'YES' ||
 }
 
 const voteTime = new Trend('vote_submit_ms', true);
+const serverAuth = new Trend('server_auth_ms', true);
+const serverTurnstile = new Trend('server_turnstile_ms', true);
+const serverValidation = new Trend('server_validation_ms', true);
+const serverInsert = new Trend('server_insert_ms', true);
+function trackServerTiming(res) {
+  const raw = res.headers['Server-Timing'] || res.headers['server-timing'] || '';
+  for (const section of raw.split(',')) {
+    const match = section.trim().match(/^([a-z]+);dur=([\d.]+)$/);
+    if (!match) continue;
+    const ms = Number(match[2]);
+    if (match[1] === 'auth') serverAuth.add(ms);
+    if (match[1] === 'turnstile') serverTurnstile.add(ms);
+    if (match[1] === 'validation') serverValidation.add(ms);
+    if (match[1] === 'insert') serverInsert.add(ms);
+  }
+}
 const authTime = new Trend('anonymous_auth_ms', true);
 const voteSuccess = new Counter('vote_success');
 const duplicateSuccess = new Counter('duplicate_rejected');
@@ -93,7 +109,7 @@ export default function () {
 
   // 3. Submit one vote to actual staging Edge Function with official test token.
   // Staging Edge Secret TURNSTILE_SECRET_KEY must be Cloudflare TEST secret,
-  // TURNSTILE_EXPECTED_HOSTNAME must be localhost.
+  // TURNSTILE_EXPECTED_HOSTNAME must be example.com for the official dummy token.
   const deviceId = `nadanu-staging-k6-${__VU}-${__ITER}-${session.user?.id || 'device'}`;
   const payload = JSON.stringify({
     contestant_id: finalistId,
@@ -107,6 +123,7 @@ export default function () {
   };
   const vote = http.post(`${url}/functions/v1/cast-vote`, payload, params);
   voteTime.add(vote.timings.duration);
+  trackServerTiming(vote);
   if (!check(vote, {
     'vote accepted HTTP 200': r => r.status === 200,
     'vote success confirmed': r => json(r)?.ok === true
@@ -121,6 +138,7 @@ export default function () {
     responseCallback: http.expectedStatuses(409),
     tags: {step: 'duplicate_vote'}
   });
+  trackServerTiming(duplicate);
   if (check(duplicate, {
     'duplicate blocked HTTP 409': r => r.status === 409
   })) duplicateSuccess.add(1);
