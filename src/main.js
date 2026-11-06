@@ -105,6 +105,53 @@ document.getElementById('submit-vote').onclick = async () => {
     btn.textContent = 'CONFIRM MY VOTE ↗';
   }
 };
-async function boot(){if(!configured){contestants=placeholders;setNotice('DESIGN PREVIEW — Connect Supabase to load real finalists. No demo votes are recorded.');render();return;}try{const [{data:cats,error:ce},{data:entries,error:ee},{data:events,error:ve}]=await Promise.all([supabase.from('categories').select('id,slug,name'),supabase.from('contestants').select('id,name,stage_name,performance_title,image_url,sort_order,category_id').eq('active',true).order('sort_order'),supabase.from('voting_events').select('id,status,starts_at,ends_at').eq('id',1).maybeSingle()]);if(ce||ee||ve)throw ce||ee||ve;const byId=new Map((cats||[]).map(x=>[x.id,x.slug]));contestants=(entries||[]).map(x=>({...x,category_slug:byId.get(x.category_id)}));votingEvent=events;if(!contestants.length)setNotice('THE STAGE IS BEING SET. FINALISTS WILL APPEAR HERE ONCE ADDED BY THE ORGANIZERS.');if(votingEvent?.status!=='open')setNotice('VOTING IS NOT OPEN YET. EXPLORE THE FINALISTS BELOW.');render();}catch(err){contestants=[];render();setNotice(`COULD NOT LOAD FINALISTS: ${err.message}. Check database migration, API and RLS policies.`,'error')}}
+// Cache only public, non-sensitive finalist/status metadata for a short window.
+// Backend cast-vote always checks the real event state and never trusts this cache.
+const BOOT_CACHE_KEY = 'nadanu_public_bootstrap_v2';
+const BOOT_CACHE_MS = 15000;
+function renderBootstrap(payload){
+  const cats = payload?.categories || [];
+  const entries = payload?.contestants || [];
+  const byId = new Map(cats.map(x=>[x.id,x.slug]));
+  contestants = entries.map(x=>({...x,category_slug:byId.get(x.category_id)}));
+  votingEvent = payload?.event || null;
+  if(!contestants.length)setNotice('THE STAGE IS BEING SET. FINALISTS WILL APPEAR HERE ONCE ADDED BY THE ORGANIZERS.');
+  if(votingEvent?.status!=='open')setNotice('VOTING IS NOT OPEN YET. EXPLORE THE FINALISTS BELOW.');
+  render();
+}
+async function loadBootstrap(){
+  // New RPC fetches categories, active contestants and event status in one HTTP request.
+  const {data,error}=await supabase.rpc('public_voting_bootstrap');
+  if(!error && data && Array.isArray(data.categories) && Array.isArray(data.contestants))return data;
+  // Compatibility path until the migration has been applied in Supabase.
+  const [{data:cats,error:ce},{data:entries,error:ee},{data:events,error:ve}]=await Promise.all([
+    supabase.from('categories').select('id,slug,name'),
+    supabase.from('contestants').select('id,name,stage_name,performance_title,image_url,sort_order,category_id').eq('active',true).order('sort_order'),
+    supabase.from('voting_events').select('id,status,starts_at,ends_at').eq('id',1).maybeSingle()
+  ]);
+  if(ce||ee||ve)throw ce||ee||ve;
+  return {categories:cats||[],contestants:entries||[],event:events};
+}
+async function boot(){
+  if(!configured){
+    contestants=placeholders;
+    setNotice('DESIGN PREVIEW — Connect Supabase to load real finalists. No demo votes are recorded.');
+    render();return;
+  }
+  try{
+    let cached=null;
+    try{
+      const item=JSON.parse(sessionStorage.getItem(BOOT_CACHE_KEY)||'null');
+      if(item && Date.now()-item.at < BOOT_CACHE_MS && item.payload)cached=item.payload;
+    }catch{}
+    if(cached){renderBootstrap(cached);return;}
+    const payload=await loadBootstrap();
+    renderBootstrap(payload);
+    try{sessionStorage.setItem(BOOT_CACHE_KEY,JSON.stringify({at:Date.now(),payload}));}catch{}
+  }catch(err){
+    contestants=[];render();
+    setNotice(`COULD NOT LOAD FINALISTS: ${err.message}. Please refresh to try again.`,'error');
+  }
+}
 const script=document.createElement('script');script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';script.async=true;script.defer=true;document.head.appendChild(script);
 boot();
