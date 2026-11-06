@@ -31,9 +31,13 @@ Deno.serve(async (req)=>{
     const verify=await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify',{method:'POST',body:fd});
     const checked=await verify.json();
     if(!checked.success||checked.hostname!==expectedHostname)return response({error:'Security check failed. Please retry.'},403,origin);
-    const {data:event,error:eventErr}=await admin.from('voting_events').select('status,starts_at,ends_at').eq('id',1).single();
+    // Independent read-only validations can run concurrently to reduce vote latency.
+    // Both results are still verified on the server before inserting any vote.
+    const [{data:event,error:eventErr},{data:cont,error:contErr}]=await Promise.all([
+      admin.from('voting_events').select('status,starts_at,ends_at').eq('id',1).single(),
+      admin.from('contestants').select('id,active').eq('id',body.contestant_id).maybeSingle()
+    ]);
     if(eventErr||!event||event.status!=='open'||(event.starts_at&&new Date(event.starts_at)>new Date())||(event.ends_at&&new Date(event.ends_at)<=new Date()))return response({error:'Voting is not open.'},403,origin);
-    const {data:cont,error:contErr}=await admin.from('contestants').select('id,active').eq('id',body.contestant_id).maybeSingle();
     if(contErr||!cont||!cont.active)return response({error:'This finalist is not available for voting.'},400,origin);
     const device_hash=await shaHmac(body.device_id);
     const {error:voteErr}=await admin.from('votes').insert({contestant_id:cont.id,voter_id:user.id,device_hash});
