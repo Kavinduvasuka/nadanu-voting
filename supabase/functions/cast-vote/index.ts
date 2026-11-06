@@ -100,39 +100,37 @@ Deno.serve(async (req) => {
     if (!checked.success || checked.hostname !== expectedHostname)
       return send({ error: 'Security check failed. Please retry.' }, 403);
 
-    const dbStarted = performance.now();
-    const [eventResult, contestantResult] = await Promise.all([
-      admin.from('voting_events')
-        .select('status,starts_at,ends_at').eq('id', 1).single(),
-      admin.from('contestants')
-        .select('id,active').eq('id', body.contestant_id).maybeSingle()
-    ]);
-    timing.validation = performance.now() - dbStarted;
-    const event = eventResult.data;
-    const contestant = contestantResult.data;
-    const now = Date.now();
-    if (eventResult.error || !event || event.status !== 'open' ||
-      (event.starts_at && Date.parse(event.starts_at) > now) ||
-      (event.ends_at && Date.parse(event.ends_at) <= now))
-      return send({ error: 'Voting is not open.' }, 403);
-    if (contestantResult.error || !contestant || !contestant.active)
-      return send({ error: 'This finalist is not available for voting.' }, 400);
-
+    // Hash is still server-side. No device identifier is stored in plaintext.
     const hashStarted = performance.now();
     const device_hash = await shaHmac(body.device_id);
     timing.hash = performance.now() - hashStarted;
 
-    const insertStarted = performance.now();
-    const { error: voteErr } = await admin.from('votes').insert({
-      contestant_id: contestant.id, voter_id: user.id, device_hash
+    // A single service-role-only SQL call validates event/finalist AND inserts vote.
+    // The DB applies the same uniqueness constraints as before.
+    // Requires migration 202611060004_atomic_vote_rpc.sql BEFORE function deployment.
+    const voteStarted = performance.now();
+    const { data: result, error: voteErr } = await admin.rpc('cast_vote_atomic', {
+      p_contestant_id: body.contestant_id,
+      p_voter_id: user.id,
+      p_device_hash: device_hash
     });
-    timing.insert = performance.now() - insertStarted;
+    timing.atomic_vote = performance.now() - voteStarted;
 
     if (voteErr) {
-      if (voteErr.code === '23505')
-        return send({ error: 'A vote has already been recorded for this browser/session.' }, 409);
+      console.error('Atomic vote RPC failed:', voteErr.code);
       return send({ error: 'Vote could not be recorded. Please contact organizers.' }, 500);
     }
+    if (result === 'duplicate')
+      return send({ error: 'A vote has already been recorded for this browser/session.' }, 409);
+    if (result === 'voting_closed')
+      return send({ error: 'Voting is not open.' }, 403);
+    if (result === 'finalist_unavailable')
+      return send({ error: 'This finalist is not available for voting.' }, 400);
+    if (result === 'invalid_request')
+      return send({ error: 'Invalid vote request.' }, 400);
+    if (result !== 'ok')
+      return send({ error: 'Vote could not be recorded. Please contact organizers.' }, 500);
+
     return send({ ok: true, message: 'Vote recorded successfully' }, 200);
   } catch (err) {
     console.error('cast-vote failure:', err);
