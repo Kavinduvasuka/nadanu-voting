@@ -127,7 +127,12 @@ root.innerHTML = `
           </label>
 
           <label>
-            PHOTO URL (OPTIONAL)
+            UPLOAD FINALIST PHOTO (JPG, PNG OR WEBP - MAX 5 MB)
+            <input id="image-file" type="file" accept="image/jpeg,image/png,image/webp"/>
+          </label>
+          <img id="image-preview" class="finalist-image-preview" alt="Selected finalist photo preview" hidden/>
+          <label>
+            OR PASTE PHOTO URL (OPTIONAL)
             <input id="image-url" type="url"
               placeholder="https://..."/>
           </label>
@@ -158,7 +163,11 @@ root.innerHTML = `
         <label>PERFORMER / TEAM NAME<input id="edit-name" maxlength="120" required/></label>
         <label>STAGE NAME / SUBTITLE<input id="edit-stage-name" maxlength="140"/></label>
         <label>PERFORMANCE TITLE<input id="edit-performance-title" maxlength="160"/></label>
-        <label>PHOTO URL<input id="edit-image-url" type="url"/></label>
+        <label>UPLOAD NEW PHOTO (OPTIONAL - JPG, PNG, WEBP; MAX 5 MB)
+          <input id="edit-image-file" type="file" accept="image/jpeg,image/png,image/webp"/>
+        </label>
+        <img id="edit-image-preview" class="finalist-image-preview" alt="Current or selected finalist photo" hidden/>
+        <label>OR UPDATE PHOTO URL<input id="edit-image-url" type="url"/></label>
         <label>DISPLAY ORDER<input id="edit-sort-order" type="number" min="0" required/></label>
         <button class="btn btn-orange" type="submit">SAVE CHANGES</button>
         <button class="btn btn-outline" id="cancel-edit" type="button">CANCEL</button>
@@ -212,6 +221,76 @@ function showDash(on) {
 
 function value(id) {
   return document.getElementById(id).value.trim();
+}
+
+// Photos are public to voters, but writing them is restricted by Storage RLS to organizers.
+const FINALIST_BUCKET = 'nadanu-finalists';
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const IMAGE_FORMATS = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp'
+};
+const temporaryImagePreviews = new Map();
+
+function updateImagePreview(inputId, previewId, existingUrl = '') {
+  const input = document.getElementById(inputId);
+  const preview = document.getElementById(previewId);
+  const oldUrl = temporaryImagePreviews.get(previewId);
+  if (oldUrl) URL.revokeObjectURL(oldUrl);
+  temporaryImagePreviews.delete(previewId);
+  const file = input.files?.[0];
+  if (file) {
+    const objectUrl = URL.createObjectURL(file);
+    temporaryImagePreviews.set(previewId, objectUrl);
+    preview.src = objectUrl;
+    preview.hidden = false;
+  } else if (existingUrl) {
+    preview.src = existingUrl;
+    preview.hidden = false;
+  } else {
+    preview.removeAttribute('src');
+    preview.hidden = true;
+  }
+}
+for (const [inputId, previewId, urlId] of [
+  ['image-file', 'image-preview', 'image-url'],
+  ['edit-image-file', 'edit-image-preview', 'edit-image-url']
+]) {
+  document.getElementById(inputId).addEventListener('change', () => {
+    updateImagePreview(inputId, previewId, document.getElementById(urlId).value);
+  });
+  document.getElementById(urlId).addEventListener('change', () => {
+    if (!document.getElementById(inputId).files?.length) {
+      updateImagePreview(inputId, previewId, document.getElementById(urlId).value);
+    }
+  });
+}
+async function uploadFinalistPhoto(file) {
+  if (!file) return null;
+  const extension = IMAGE_FORMATS[file.type];
+  if (!extension) throw new Error('Please select a JPG, PNG or WebP photo.');
+  if (file.size < 1 || file.size > MAX_IMAGE_BYTES) {
+    throw new Error('Finalist photo must be smaller than 5 MB.');
+  }
+  if (!(await authorized())) throw new Error('Only organizers can upload photos.');
+  // A unique path prevents caching issues and never overwrites an existing image.
+  const filePath = `finalists/${crypto.randomUUID()}.${extension}`;
+  const { error } = await supabase.storage.from(FINALIST_BUCKET).upload(filePath, file, {
+    cacheControl: '3600',
+    contentType: file.type,
+    upsert: false
+  });
+  if (error) throw error;
+  const { data } = supabase.storage.from(FINALIST_BUCKET).getPublicUrl(filePath);
+  if (!data?.publicUrl) throw new Error('Photo uploaded, but public URL could not be created.');
+  return { url: data.publicUrl, filePath };
+}
+
+async function cleanupUnlinkedPhoto(uploaded) {
+  if (!uploaded?.filePath) return;
+  try { await supabase.storage.from(FINALIST_BUCKET).remove([uploaded.filePath]); }
+  catch { /* Do not conceal original database error. */ }
 }
 
 function toLocal(ts) {
@@ -525,11 +604,14 @@ if (!configured) {
     async e => {
       e.preventDefault();
 
+      const button = e.target.querySelector('button[type="submit"]');
+      let uploaded = null;
+      button.disabled = true;
+      button.textContent = 'SAVING FINALIST…';
       try {
-        if (!(await authorized())) {
-          throw new Error('Admin session expired.');
-        }
-
+        if (!(await authorized())) throw new Error('Admin session expired.');
+        const photo = document.getElementById('image-file').files?.[0];
+        uploaded = await uploadFinalistPhoto(photo);
         const { error } = await supabase
           .from('contestants')
           .insert({
@@ -537,19 +619,24 @@ if (!configured) {
             name: value('name'),
             stage_name: value('stage-name'),
             performance_title: value('performance-title'),
-            image_url: value('image-url') || null,
+            image_url: uploaded?.url || value('image-url') || null,
             sort_order: Number(value('sort-order')),
             active: true
           });
 
         if (error) throw error;
-
+        // Once saved, the image belongs to the finalist.
+        uploaded = null;
         e.target.reset();
+        updateImagePreview('image-file', 'image-preview');
         await load();
-        setNotice('Finalist added.', 'success');
-
+        setNotice('Finalist and photo saved successfully.', 'success');
       } catch (err) {
-        setNotice(err.message, 'error');
+        await cleanupUnlinkedPhoto(uploaded);
+        setNotice('Could not add finalist: ' + err.message, 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = 'ADD FINALIST ↗';
       }
     };
 
@@ -574,6 +661,8 @@ if (!configured) {
           'edit-image-url': c.image_url || '', 'edit-sort-order': c.sort_order
         };
         for (const [id,v] of Object.entries(fields)) document.getElementById(id).value = v;
+        document.getElementById('edit-image-file').value = '';
+        updateImagePreview('edit-image-file', 'edit-image-preview', c.image_url || '');
         document.getElementById('edit-panel').hidden = false;
         document.getElementById('edit-panel').scrollIntoView({behavior:'smooth'});
         return;
@@ -622,18 +711,35 @@ if (!configured) {
   };
   document.getElementById('edit-form').onsubmit = async e => {
     e.preventDefault();
+    const button = e.target.querySelector('button[type="submit"]');
+    let uploaded = null;
+    button.disabled = true;
+    button.textContent = 'SAVING CHANGES…';
     try {
       if (!await authorized()) throw Error('Admin session expired. Sign in again.');
+      const photo = document.getElementById('edit-image-file').files?.[0];
+      uploaded = await uploadFinalistPhoto(photo);
       const {data,error} = await supabase.from('contestants').update({
         category_id:value('edit-category'), name:value('edit-name'),
         stage_name:value('edit-stage-name'), performance_title:value('edit-performance-title'),
-        image_url:value('edit-image-url')||null, sort_order:Number(value('edit-sort-order'))
+        image_url:uploaded?.url || value('edit-image-url') || null,
+        sort_order:Number(value('edit-sort-order'))
       }).eq('id',value('edit-id')).select('id').maybeSingle();
       if(error)throw error;
       if(!data)throw Error('Finalist was not updated. Check admin access.');
+      uploaded = null;
       document.getElementById('edit-panel').hidden=true;
-      await load();setNotice('Finalist updated successfully.','success');
-    } catch(err){setNotice(err.message,'error');}
+      document.getElementById('edit-image-file').value='';
+      updateImagePreview('edit-image-file', 'edit-image-preview');
+      await load();
+      setNotice('Finalist photo and details updated successfully.','success');
+    } catch(err) {
+      await cleanupUnlinkedPhoto(uploaded);
+      setNotice('Could not update finalist: ' + err.message,'error');
+    } finally {
+      button.disabled = false;
+      button.textContent = 'SAVE CHANGES';
+    }
   };
 
   async function refreshVoterRecords(){
