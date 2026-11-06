@@ -15,6 +15,34 @@ window.addEventListener('storage', e => {
     if (alreadyVoted) setNotice('ALREADY VOTED — YOUR ONE VOTE HAS BEEN RECORDED.', 'success');
   }
 });
+let checkingVoteStatus = false;
+async function syncVoteStatus() {
+  if (!configured || !supabase || checkingVoteStatus) return;
+  checkingVoteStatus = true;
+  try {
+    const { data: sessionInfo } = await supabase.auth.getSession();
+    if (!sessionInfo.session?.user?.is_anonymous) return;
+    const { data, error } = await supabase.functions.invoke('vote-status', {
+      body: { device_id: getBrowserToken() }
+    });
+    if (error || typeof data?.voted !== 'boolean') return;
+    if (data.voted) {
+      if (!alreadyVoted) markAlreadyVoted();
+    } else if (alreadyVoted) {
+      alreadyVoted = false;
+      localStorage.removeItem(VOTE_FLAG_KEY);
+      render();
+      setNotice('YOUR PREVIOUS VOTE WAS RESET BY AN ORGANIZER. YOU MAY VOTE AGAIN.', 'success');
+    }
+  } catch {
+    // Keep the last known state when the optional status endpoint is unavailable.
+  } finally {
+    checkingVoteStatus = false;
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) void syncVoteStatus();
+});
 let selected = 'all', contestants = [], votingEvent=null, busy=false, turnstileToken=null, widgetId=null;
 const app=document.getElementById('app');
 app.innerHTML=`<div class="concert-atmosphere" aria-hidden="true"><div class="light-beam beam-left"></div><div class="light-beam beam-right"></div><div class="ambient-orb orb-one"></div><div class="ambient-orb orb-two"></div><div class="retro-grid"></div><div class="music-sparks"></div></div><div class="site-noise"></div><header class="topbar"><div class="wrap topbar-inner">${logo()}<nav><a class="nav-active" href="#performers">THE FINALISTS</a><a href="#how">HOW TO VOTE</a></nav><button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">☰</button></div></header>
@@ -167,9 +195,10 @@ async function boot(){
       const item=JSON.parse(sessionStorage.getItem(BOOT_CACHE_KEY)||'null');
       if(item && Date.now()-item.at < BOOT_CACHE_MS && item.payload)cached=item.payload;
     }catch{}
-    if(cached){renderBootstrap(cached);return;}
+    if(cached){renderBootstrap(cached);void syncVoteStatus();return;}
     const payload=await loadBootstrap();
     renderBootstrap(payload);
+    void syncVoteStatus();
     try{sessionStorage.setItem(BOOT_CACHE_KEY,JSON.stringify({at:Date.now(),payload}));}catch{}
   }catch(err){
     contestants=[];render();
