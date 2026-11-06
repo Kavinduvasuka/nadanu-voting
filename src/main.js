@@ -26,13 +26,14 @@ async function ensureAnonymousVoter() {
   if (sessionError) throw new Error(`Could not read voting session: ${sessionError.message}`);
 
   if (sessionData.session) {
-    // getUser() validates the session with Supabase instead of trusting cached local data.
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (!userError && userData.user?.is_anonymous === true) {
+    // Use the cached session only to decide whether to create an anonymous identity.
+    // The cast-vote Edge Function independently validates the access token with
+    // Supabase Auth on EVERY submission. This avoids a redundant client network call.
+    if (sessionData.session.user?.is_anonymous === true) {
       return;
     }
 
-    // Admin accounts (and invalid sessions) cannot submit an anonymous vote.
+    // Admin accounts cannot submit an anonymous vote.
     // This signs out the admin on this browser; use a separate browser profile for admin.
     const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
     if (signOutError) throw new Error(`Could not switch to anonymous voting: ${signOutError.message}`);
