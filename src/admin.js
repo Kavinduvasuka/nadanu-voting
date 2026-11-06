@@ -175,6 +175,9 @@ root.innerHTML = `
       <button class="btn btn-outline" id="refresh">
         REFRESH RESULTS ↻
       </button>
+      <button class="btn btn-orange" id="download-results-pdf" type="button">
+        DOWNLOAD VOTING RESULTS PDF ↓
+      </button>
     </div>
     <div class="admin-panel">
       <div class="tiny-label">VOTER DEVICE RECORDS</div>
@@ -695,6 +698,40 @@ if (!configured) {
       setNotice('Selected vote reset. Audit log updated.','success');
     }catch(err){setNotice('Vote reset failed: '+err.message,'error');}
     finally{btn.disabled=false;document.getElementById('reset-password').value='';}
+  };
+
+  // ========================================
+  // DOWNLOAD OFFICIAL RESULTS PDF (ADMIN ONLY)
+  // ========================================
+
+  document.getElementById('download-results-pdf').onclick = async () => {
+    const button = document.getElementById('download-results-pdf');
+    button.disabled = true;
+    button.textContent = 'PREPARING RESULTS PDF…';
+    try {
+      if (!(await authorized())) throw new Error('Organizer login required.');
+      // Fetch current server-side results, never rely on stale dashboard display.
+      const [resultsResponse, contestantsResponse, categoriesResponse] = await Promise.all([
+        supabase.rpc('admin_vote_results'),
+        supabase.from('contestants').select('id,name,category_id'),
+        supabase.from('categories').select('id,name')
+      ]);
+      if (resultsResponse.error) throw resultsResponse.error;
+      if (contestantsResponse.error) throw contestantsResponse.error;
+      if (categoriesResponse.error) throw categoriesResponse.error;
+      const { downloadVotingResultsPdf } = await import('./results-pdf.js');
+      await downloadVotingResultsPdf({
+        results: resultsResponse.data || [],
+        contestants: contestantsResponse.data || [],
+        categories: categoriesResponse.data || []
+      });
+      setNotice('OFFICIAL NADANU 3.0 VOTING RESULTS PDF DOWNLOADED.', 'success');
+    } catch (err) {
+      setNotice('Could not download voting results PDF: ' + (err?.message || 'Unknown error'), 'error');
+    } finally {
+      button.disabled = false;
+      button.textContent = 'DOWNLOAD VOTING RESULTS PDF ↓';
+    }
   };
 
   // ========================================
