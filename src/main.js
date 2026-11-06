@@ -20,12 +20,24 @@ async function syncVoteStatus() {
   if (!configured || !supabase || checkingVoteStatus) return;
   checkingVoteStatus = true;
   try {
-    const { data: sessionInfo } = await supabase.auth.getSession();
-    if (!sessionInfo.session?.user?.is_anonymous) return;
+    let { data: sessionInfo, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!sessionInfo.session && alreadyVoted) {
+      // The browser can lose its anonymous login while keeping the vote marker.
+      // Create a fresh anonymous identity only when reconciling a saved vote marker.
+      // The server checks the existing hashed browser identifier, not this new identity.
+      const { error: loginError } = await supabase.auth.signInAnonymously();
+      if (loginError) throw loginError;
+      ({ data: sessionInfo, error: sessionError } = await supabase.auth.getSession());
+      if (sessionError) throw sessionError;
+    }
+    if (!sessionInfo.session) return;
     const { data, error } = await supabase.functions.invoke('vote-status', {
       body: { device_id: getBrowserToken() }
     });
-    if (error || typeof data?.voted !== 'boolean') return;
+    if (error || typeof data?.voted !== 'boolean') {
+      throw new Error('Could not check voting status. Please try again.');
+    }
     if (data.voted) {
       if (!alreadyVoted) markAlreadyVoted();
     } else if (alreadyVoted) {
@@ -34,27 +46,37 @@ async function syncVoteStatus() {
       render();
       setNotice('YOUR PREVIOUS VOTE WAS RESET BY AN ORGANIZER. YOU MAY VOTE AGAIN.', 'success');
     }
-  } catch {
-    // Keep the last known state when the optional status endpoint is unavailable.
+  } catch (err) {
+    // Never unlock a vote on a network failure: server must confirm removal.
+    if (alreadyVoted) setNotice('COULD NOT VERIFY YOUR VOTE STATUS. REFRESH TO TRY AGAIN.', 'error');
   } finally {
     checkingVoteStatus = false;
+    updateVoteStatusButton();
   }
 }
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) void syncVoteStatus();
 });
+function updateVoteStatusButton() {
+  const button = document.getElementById('recheck-vote');
+  if (!button) return;
+  button.hidden = !alreadyVoted;
+  button.disabled = checkingVoteStatus;
+  button.textContent = checkingVoteStatus ? 'CHECKING VOTE STATUS…' : 'REFRESH VOTING STATUS ↻';
+}
 let selected = 'all', contestants = [], votingEvent=null, busy=false, turnstileToken=null, widgetId=null;
 const app=document.getElementById('app');
 app.innerHTML=`<div class="concert-atmosphere" aria-hidden="true"><div class="light-beam beam-left"></div><div class="light-beam beam-right"></div><div class="ambient-orb orb-one"></div><div class="ambient-orb orb-two"></div><div class="retro-grid"></div><div class="music-sparks"></div></div><div class="site-noise"></div><header class="topbar"><div class="wrap topbar-inner">${logo()}<nav><a class="nav-active" href="#performers">THE FINALISTS</a><a href="#how">HOW TO VOTE</a></nav><button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">☰</button></div></header>
 <main><section class="hero"><div class="wrap hero-grid"><div class="hero-copy"><div class="eyebrow"><span class="live-dot"></span> NADANU 3.0 • THE GRAND FINALE</div><div class="hero-title"><span class="title-top">YOUR VOTE.</span><span class="title-main">THEIR <em>STAGE.</em></span></div><p class="hero-body">One night. Limitless talent. The power is in your hands. Vote for the performer who deserves the <b>PEOPLE'S CHOICE</b> crown.</p><div class="hero-actions"><a class="btn btn-orange" href="#performers">VOTE FOR YOUR FAVORITE <span>↗</span></a><a class="btn btn-outline" href="#how">HOW IT WORKS ↓</a></div><div class="hero-mini"><span>✦ SOLO SINGING</span><span>✳ SOLO DANCING</span><span>★ GROUP DANCING</span></div></div><div class="hero-art audition-showcase" aria-hidden="true"><div class="poster-outline"></div><div class="poster-halo"><span>ONE<br/>VOTE</span></div><div class="poster-rays">✺</div><div class="poster-ticket">PEOPLE'S<br/>CHOICE <b>2026</b></div><div class="poster-stamp">ICBT<br/>COMPUTING<br/>SOCIETY</div><div class="poster-cut">FEEL THE BEAT • OWN THE STAGE</div></div></div><div class="ticker"><div>PEOPLE'S CHOICE AWARD <span>★</span> YOUR VOICE DECIDES THE WINNER <span>★</span> NADANU 3.0 GRAND FINALE <span>★</span> PEOPLE'S CHOICE AWARD <span>★</span></div></div></section>
-<section class="main-vote wrap" id="performers"><div class="section-heading"><div><div class="tiny-label">✦ THE MAIN EVENT / 2026</div><h2>MAKE YOUR <em>MARK.</em></h2><p>Pick your favorite act. Every vote counts.</p></div><div class="vote-status" id="vote-status"><span class="live-dot"></span> CHECKING VOTING STATUS</div></div><div id="notice" class="notice" hidden></div><div class="filters" id="filters"><button class="filter active" data-cat="all">ALL PERFORMERS <small>↗</small></button>${CATS.map(c=>`<button class="filter" data-cat="${c.slug}">${c.name} <small>${c.num}</small></button>`).join('')}</div><div class="cards" id="cards"></div><div class="voting-foot"><span>⚡ ONE VOTE TOTAL ACROSS ALL CATEGORIES</span><span>VOTING IS SUBJECT TO VERIFICATION.</span></div></section>
+<section class="main-vote wrap" id="performers"><div class="section-heading"><div><div class="tiny-label">✦ THE MAIN EVENT / 2026</div><h2>MAKE YOUR <em>MARK.</em></h2><p>Pick your favorite act. Every vote counts.</p></div><div class="vote-status" id="vote-status"><span class="live-dot"></span> CHECKING VOTING STATUS</div></div><div id="notice" class="notice" hidden></div><button class="btn btn-outline" type="button" id="recheck-vote" hidden>REFRESH VOTING STATUS ↻</button><div class="filters" id="filters"><button class="filter active" data-cat="all">ALL PERFORMERS <small>↗</small></button>${CATS.map(c=>`<button class="filter" data-cat="${c.slug}">${c.name} <small>${c.num}</small></button>`).join('')}</div><div class="cards" id="cards"></div><div class="voting-foot"><span>⚡ ONE VOTE TOTAL ACROSS ALL CATEGORIES</span><span>VOTING IS SUBJECT TO VERIFICATION.</span></div></section>
 <section class="how" id="how"><div class="wrap how-grid"><div><div class="tiny-label">HOW TO TAKE PART</div><h2>ONE VOTE.<br/><em>BIG IMPACT.</em></h2><p>No registration form. No long process. Just a few simple steps to support your favorite performer.</p></div><div class="steps"><div class="step"><b>01</b><div><h3>EXPLORE THE FINALISTS</h3><p>Browse all three categories and find your favorite performance.</p></div></div><div class="step"><b>02</b><div><h3>CHOOSE YOUR ONE FAVORITE</h3><p>You get one vote total, not one vote per category.</p></div></div><div class="step"><b>03</b><div><h3>CONFIRM YOUR VOTE</h3><p>Pass the security check and cast your vote. You cannot change it afterward.</p></div></div></div></div></section><section class="end-banner"><div class="wrap"><span>DARE TO DAZZLE</span><h2>THE STAGE IS THEIRS.<br/><em>THE CHOICE IS YOURS.</em></h2></div></section></main>${footer()}
 <dialog class="vote-modal" id="vote-modal"><button class="modal-x" id="close-modal" aria-label="Close">✕</button><div class="tiny-label">✦ OFFICIAL PEOPLE'S CHOICE VOTE</div><h2>MAKE IT <em>COUNT.</em></h2><p id="modal-desc"></p><p class="warn">You may cast only one vote total. This choice is final.</p><div id="turnstile" class="turnstile"></div><button class="btn btn-orange modal-submit" id="submit-vote">CONFIRM MY VOTE ↗</button><p class="modal-feedback" id="modal-feedback" role="status"></p></dialog>`;
 
 function status(){const el=document.getElementById('vote-status');let label='PREVIEW MODE';let cls='closed';if(configured){if(votingEvent?.status==='open' && (!votingEvent.starts_at || new Date(votingEvent.starts_at)<=new Date()) && (!votingEvent.ends_at || new Date(votingEvent.ends_at)>new Date())){label='VOTING OPEN';cls='open'}else if(votingEvent?.status==='closed'){label='VOTING CLOSED'}else label='VOTING NOT OPEN';}el.className=`vote-status ${cls}`;el.innerHTML=`<span class="live-dot"></span> ${label}`;}
 function cardMarkup(c,i){const cat=CATS.find(x=>x.slug===c.category_slug);let disabled= alreadyVoted || !configured || !votingEvent || votingEvent.status!=='open' || (votingEvent.starts_at && new Date(votingEvent.starts_at)>new Date()) || (votingEvent.ends_at && new Date(votingEvent.ends_at)<new Date()) || c.demo;
 return `<article class="performer-card"><div class="card-art ${cat?.slug||''}">${c.image_url?`<img src="${safe(c.image_url)}" alt="Photo of ${safe(c.name)}" loading="lazy" onerror="this.remove()"/>`: `<div class="art-letter">${cat?.symbol||'★'}</div>`}<div class="card-corner">${safe(cat?.name||'FINALIST')}</div><div class="card-index">#${String(c.sort_order||i+1).padStart(2,'0')}</div><div class="art-mark">N<span>3.0</span></div></div><div class="card-info"><span class="card-label">THE FINALISTS / ${safe(cat?.num||'00')}</span><h3>${safe(c.name)}</h3><p class="card-stage">${safe(c.stage_name||c.performance_title||cat?.sub||'')}</p><div class="card-bottom"><span>${safe(c.performance_title||cat?.name||'NADANU 3.0')}</span><button class="vote-button" data-vote="${safe(c.id)}" ${disabled?'disabled':''}>${alreadyVoted?'ALREADY VOTED':disabled?'NOT OPEN YET':'VOTE NOW'} <span>↗</span></button></div></div></article>`}
-function render(){const data=selected==='all'?contestants:contestants.filter(c=>c.category_slug===selected);document.getElementById('cards').innerHTML=data.length?data.map(cardMarkup).join(''):'<div class="empty">NO FINALISTS ADDED TO THIS CATEGORY YET.<br/><small>ORGANIZERS WILL ADD THEM SOON.</small></div>';status()}
+function render(){updateVoteStatusButton();const data=selected==='all'?contestants:contestants.filter(c=>c.category_slug===selected);document.getElementById('cards').innerHTML=data.length?data.map(cardMarkup).join(''):'<div class="empty">NO FINALISTS ADDED TO THIS CATEGORY YET.<br/><small>ORGANIZERS WILL ADD THEM SOON.</small></div>';status()}
+document.getElementById('recheck-vote').addEventListener('click', () => { void syncVoteStatus(); });
 document.getElementById('filters').addEventListener('click',e=>{const btn=e.target.closest('[data-cat]');if(!btn)return;selected=btn.dataset.cat;document.querySelectorAll('.filter').forEach(x=>x.classList.toggle('active',x===btn));render()});
 document.getElementById('cards').addEventListener('click',e=>{const btn=e.target.closest('[data-vote]');if(!btn||btn.disabled)return;const c=contestants.find(x=>x.id===btn.dataset.vote);if(c)openVote(c)});
 document.getElementById('menu-toggle').onclick=()=>document.querySelector('nav').classList.toggle('open');
