@@ -179,8 +179,8 @@ root.innerHTML = `
     <div class="admin-panel">
       <div class="tiny-label">VOTER DEVICE RECORDS</div>
       <p>These device references are anonymous hashes, not phone names. Select a vote using its finalist, timestamp and reference. Resetting ONE vote requires admin credentials and is audited.</p>
-      <button class="btn btn-outline" id="load-votes" type="button">LOAD VOTER RECORDS ↻</button>
-      <div id="voter-records" class="finalist-list"></div>
+      <button class="btn btn-outline" id="load-votes" type="button" aria-expanded="false" aria-controls="voter-records">VIEW VOTED DEVICES</button>
+      <div id="voter-records" class="finalist-list" hidden></div>
       <form id="reset-form" hidden>
         <input id="reset-vote-id" type="hidden"/>
         <p id="reset-selection"></p>
@@ -642,7 +642,31 @@ if (!configured) {
       ?voteCache.map(v=>`<div class="finalist-row"><div><strong>${safe(v.finalist_name)}</strong><small>${safe(new Date(v.voted_at).toLocaleString())} · Device ref: ${safe(v.device_reference)}</small></div><button class="small-btn danger" type="button" data-reset="${safe(v.vote_id)}">RESET VOTE</button></div>`).join('')
       :'<p>No votes recorded.</p>';
   }
-  document.getElementById('load-votes').onclick=()=>refreshVoterRecords().catch(err=>setNotice(err.message,'error'));
+  document.getElementById('load-votes').onclick=async()=>{
+    const btn=document.getElementById('load-votes');
+    const list=document.getElementById('voter-records');
+    const form=document.getElementById('reset-form');
+    if(!list.hidden){
+      list.hidden=true;
+      form.hidden=true;
+      document.getElementById('reset-password').value='';
+      btn.textContent='VIEW VOTED DEVICES';
+      btn.setAttribute('aria-expanded','false');
+      return;
+    }
+    btn.disabled=true;
+    btn.textContent='LOADING DEVICES…';
+    try{
+      await refreshVoterRecords();
+      list.hidden=false;
+      btn.textContent='HIDE VOTED DEVICES';
+      btn.setAttribute('aria-expanded','true');
+    }catch(err){
+      list.hidden=true;
+      btn.textContent='VIEW VOTED DEVICES';
+      setNotice(err.message,'error');
+    }finally{btn.disabled=false;}
+  };
   document.getElementById('voter-records').onclick=e=>{
     const b=e.target.closest('[data-reset]');if(!b)return;
     const v=voteCache.find(x=>x.vote_id===b.dataset.reset);if(!v)return;
