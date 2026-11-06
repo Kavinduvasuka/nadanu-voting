@@ -13,6 +13,12 @@ const url=__ENV.STAGING_SUPABASE_URL;
 const key=__ENV.STAGING_PUBLISHABLE_KEY||'';
 const contestant=__ENV.STAGING_CONTESTANT_ID||'';
 const vus=Number(__ENV.TEST_VUS||0);
+// Optional staging-only Sydney routing; empty means default nearest-region routing.
+const functionRegion=__ENV.TEST_FUNCTION_REGION||'';
+if(functionRegion && functionRegion!=='ap-southeast-2') {
+  throw Error('SAFETY STOP: unsupported staging test function region');
+}
+const voteEndpoint=`${url}/functions/v1/cast-vote${functionRegion?'?forceFunctionRegion=ap-southeast-2':''}`;
 const sessions=new SharedArray('private staging voters',()=>{
   const payload=JSON.parse(open('./.local/staging-600-sessions.json'));
   if(payload.project_ref!==REF)throw Error('Wrong staging sessions file');
@@ -49,7 +55,7 @@ const voteLatency=new Trend('vote_insert_latency_ms',true);
 
 export default function(){
   const session=sessions[__VU-1];
-  const res=http.post(`${url}/functions/v1/cast-vote`,JSON.stringify({
+  const res=http.post(voteEndpoint,JSON.stringify({
     contestant_id:contestant,
     device_id:session.device_id,
     turnstile_token:'XXXX.DUMMY.TOKEN.XXXX'
