@@ -53,3 +53,51 @@ body { background:#160c07; }
 .concert-atmosphere .light-beam, .concert-atmosphere .ambient-orb, .concert-atmosphere .retro-grid, .concert-atmosphere .music-sparks {pointer-events:none;}
 @media(max-width:620px) { .concert-atmosphere .light-beam{width:75vw;opacity:.12}.concert-atmosphere .ambient-orb{opacity:.16} }
 @media(prefers-reduced-motion:reduce) { .concert-atmosphere * { animation:none!important; } }
+
+
+/* Compact, static hero: keeps the voting finalists immediately in view. */
+.mini-hero {
+  position: relative;
+  background: linear-gradient(110deg, rgba(40,22,16,.98), rgba(68,31,19,.89) 62%, rgba(29,15,12,.98));
+  border-bottom: 1px solid rgba(241,160,80,.32);
+  overflow: hidden;
+}
+.mini-hero::after {
+  content: ""; position: absolute; pointer-events: none;
+  inset: 0 0 0 auto; width: 34%;
+  background: radial-gradient(ellipse at 75% 45%, rgba(241,147,63,.12), transparent 70%);
+}
+.mini-hero-inner {
+  min-height: 184px; padding: 31px 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 28px;
+  position: relative; z-index: 1;
+}
+.mini-hero-kicker {
+  display: block; font: 10px 'Audiowide',sans-serif;
+  letter-spacing: 2px; color: #f4ac6c; margin-bottom: 12px;
+}
+.mini-hero h1 {
+  margin: 0; font: clamp(32px,4vw,56px)/1.13 'Bungee',sans-serif;
+  letter-spacing: -.8px; color: #fff0dc;
+}
+.mini-hero h1 em { color: #f5a45b; font-style: normal; }
+.mini-hero p {
+  margin: 12px 0 0; color: #d6b8a0;
+  font: 11px/1.7 'Audiowide',sans-serif;
+}
+.mini-hero-link {
+  flex-shrink: 0; display: inline-flex; align-items: center; gap: 15px;
+  border: 1px solid #bd7b4d; background: rgba(24,13,10,.58);
+  padding: 14px 18px; color: #ffcf99;
+  font: 10px 'Audiowide',sans-serif;
+  transition: background-color .2s,border-color .2s;
+}
+.mini-hero-link:hover { background: rgba(120,60,26,.35); border-color: #f4ae72; }
+.mini-hero-link span { font-size: 16px; }
+@media (max-width:700px) {
+  .mini-hero-inner { min-height: 0; padding: 28px 0 30px; display: block; }
+  .mini-hero-kicker { font-size: 8px; letter-spacing: 1.25px; }
+  .mini-hero h1 { font-size: clamp(28px,8vw,42px); }
+  .mini-hero p { font-size: 10px; margin-top: 9px; }
+  .mini-hero-link { margin-top: 18px; font-size: 9px; padding: 12px 14px; }
+}
