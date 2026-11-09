@@ -47,3 +47,38 @@ body{isolation:isolate}.concert-atmosphere{position:fixed;inset:0;overflow:hidde
   .mini-hero p { font-size: 10px; margin-top: 9px; }
   .mini-hero-link { margin-top: 18px; font-size: 9px; padding: 12px 14px; }
 }
+
+/* Nadanu AR matching animated concert backdrop — visuals only.
+   Same spotlight/orb/grid/spark keyframes as grand-finale-poster/style.css.
+   Keep content interactive above the effects and honour reduced-motion. */
+#app > .concert-atmosphere {
+  background: radial-gradient(ellipse at 50% 80%, #3b180e 0%, #160c07 58%, #0e0705 100%);
+  z-index: 0;
+}
+#app > .concert-atmosphere .light-beam {
+  animation: spotlight-sway 13s ease-in-out infinite alternate;
+}
+#app > .concert-atmosphere .beam-right {
+  animation-delay: -6s;
+  animation-direction: alternate-reverse;
+}
+#app > .concert-atmosphere .ambient-orb {
+  animation: ambient-float 17s ease-in-out infinite alternate;
+}
+#app > .concert-atmosphere .orb-two { animation-delay: -8s; }
+#app > .concert-atmosphere .retro-grid {
+  animation: grid-drift 18s linear infinite;
+}
+#app > .concert-atmosphere .music-sparks {
+  animation: sparks-drift 32s linear infinite;
+}
+#app > main .mini-hero {
+  background: linear-gradient(110deg, rgba(40,22,16,.76), rgba(68,31,19,.62) 62%, rgba(29,15,12,.76));
+}
+#app > main .main-vote { background: transparent; }
+@media (prefers-reduced-motion: reduce) {
+  #app > .concert-atmosphere .light-beam,
+  #app > .concert-atmosphere .ambient-orb,
+  #app > .concert-atmosphere .retro-grid,
+  #app > .concert-atmosphere .music-sparks { animation: none !important; }
+}
