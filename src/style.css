@@ -66,3 +66,13 @@
 .finalist-image-preview[hidden] { display:none !important; }
 .admin-panel input[type=file] { cursor:pointer; }
 .admin-panel input[type=file]::file-selector-button { background:#ec8c31; color:#241109; border:0; padding:9px; margin-right:12px; cursor:pointer; }
+
+/* Finalist portrait safety: display the complete photograph without cropping faces. */
+.performer-card .card-art {
+  background: radial-gradient(circle at 50% 35%, #5e372c 0%, #261712 62%, #170e0b 100%);
+}
+.performer-card .card-art img {
+  object-fit: contain !important;
+  object-position: 50% 50%;
+  filter: none;
+}
