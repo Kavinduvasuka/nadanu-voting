@@ -54,13 +54,17 @@ Deno.serve(async req => {
     const filter = user.is_anonymous
       ? `voter_id.eq.${user.id},device_hash.eq.${hashed}`
       : `device_hash.eq.${hashed}`;
-    const { data, error } = await admin.from('votes').select('id')
-      .or(filter).limit(1);
+    const { data, error } = await admin.from('votes').select('category_id')
+      .or(filter).limit(50);
     if (error) {
       console.error('vote-status query failed:', error.code);
       return respond(origin, 503, { error: 'Voting status unavailable.' });
     }
-    return respond(origin, 200, { voted: (data?.length || 0) > 0 });
+    const votedCategories = [...new Set((data || []).map(row => row.category_id))];
+    return respond(origin, 200, {
+      voted: votedCategories.length > 0,
+      voted_categories: votedCategories
+    });
   } catch (err) {
     console.error('vote-status failed:', err instanceof Error ? err.name : 'unknown');
     return respond(origin, 503, { error: 'Voting status unavailable.' });
