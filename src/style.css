@@ -76,3 +76,22 @@
   object-position: 50% 50%;
   filter: none;
 }
+
+
+/* Public final results: shown only after server-side publication authorization. */
+.public-results { padding-top: 4rem; padding-bottom: 4rem; }
+.public-results[hidden] { display: none !important; }
+.results-charts { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,310px),1fr)); gap: 1.4rem; }
+.public-results-category { padding: 1.5rem; background: #24140e; border: 1px solid #9a603b; border-radius: 16px; }
+.public-results-category h3 { font-family: 'Bungee', sans-serif; font-size: clamp(1rem,2vw,1.35rem); color: #ffb568; margin: 0 0 .4rem; }
+.public-results-total { font-family: 'Audiowide', sans-serif; font-size: .75rem; color: #d9ae85; margin-bottom: 1.6rem; }
+.public-result-row { margin: 1.15rem 0; }
+.public-result-details { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: .45rem; font-size: .9rem; }
+.public-result-details span { overflow-wrap: anywhere; }
+.public-result-details strong { color: #ffc077; white-space: nowrap; }
+.public-result-track { height: 15px; border-radius: 999px; overflow: hidden; background: #493022; }
+.public-result-bar { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #c45118, #ffb24a); transition: width .6s ease; }
+.chart-publish-control { margin-top: 1.7rem; border-top: 1px solid #815138; padding-top: 1.3rem; }
+.chart-publish-control p { margin-bottom: .8rem; }
+.chart-publish-note { font-size: .78rem; opacity: .8; }
+.chart-publish-control button:disabled { opacity: .5; cursor: not-allowed; }

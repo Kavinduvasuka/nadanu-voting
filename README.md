@@ -121,3 +121,14 @@ Accepted formats: JPG, PNG, WebP; maximum size: **5 MB**. After a successful upl
 Storage uses the **public** Supabase bucket `nadanu-finalists`, with `storage.objects` INSERT and DELETE policies restricted to logged-in admins via `public.is_voting_admin()`. Public images can be viewed by voting visitors but uploads are not public. The bucket and policies must exist in the same Supabase project as the website.
 
 To publish frontend changes: rebuild Vite with the production `.env` and `VITE_BASE_PATH=/nadanu-voting/`, copy `dist/*` into `docs/`, then commit and push `docs/`. Source updates alone do not publish to GitHub Pages.
+
+
+## Public results bar chart (organizer-controlled)
+
+Apply `supabase/migrations/202611200001_closed_results_chart.sql` in the **same Supabase project** after all earlier migrations, and rebuild the frontend to deploy the new chart UI. The default visibility is OFF.
+
+In Control Room: save event status **CLOSED**, then click **ENABLE RESULTS CHART**. The public voting page will only display category-wise finalist vote totals when **both** conditions are true. Closing the event alone never displays results. Use **HIDE RESULTS CHART** to revoke publication. Reopening voting automatically disables chart publication.
+
+The public `public_closed_vote_results()` RPC enforces visibility server-side, so vote totals stay private before publication. It returns aggregated totals only, never voter identifiers. Test with an unauthenticated browser before going live. Existing admin-only results and PDF download remain available.
+
+**Deployment:** This feature requires the new SQL migration and a production frontend build copied to `docs/`; changing files in `src/` alone does not update the GitHub Pages site.

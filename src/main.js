@@ -81,6 +81,10 @@ let selected = 'solo-singing', contestants = [], votingEvent=null, busy=false, t
 const app=document.getElementById('app');
 app.innerHTML=`<div class="concert-atmosphere" aria-hidden="true"><div class="light-beam beam-left"></div><div class="light-beam beam-right"></div><div class="ambient-orb orb-one"></div><div class="ambient-orb orb-two"></div><div class="retro-grid"></div><div class="music-sparks"></div></div><div class="site-noise"></div><header class="topbar"><div class="wrap topbar-inner">${logo()}<nav><a class="nav-active" href="#performers">THE FINALISTS</a><a href="#how">HOW TO VOTE</a></nav><button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">☰</button></div></header>
 <main><section class="mini-hero" aria-label="Nadanu People's Choice"><div class="wrap mini-hero-inner"><div class="mini-hero-copy"><span class="mini-hero-kicker">NADANU 3.0 · GRAND FINALE 2026</span><h1>PEOPLE'S <em>CHOICE.</em></h1><p>Feel the Beat. Own the Stage. Your vote decides.</p></div><a class="mini-hero-link" href="#performers">EXPLORE FINALISTS <span aria-hidden="true">↗</span></a></div></section><section class="main-vote wrap" id="performers"><div class="section-heading"><div><div class="tiny-label">✦ THE MAIN EVENT / 2026</div><h2>MAKE YOUR <em>MARK.</em></h2><p>Pick your favorite act. Every vote counts.</p></div><div class="vote-status" id="vote-status"><span class="live-dot"></span> CHECKING VOTING STATUS</div></div><div id="notice" class="notice" hidden></div><button class="btn btn-outline" type="button" id="recheck-vote" hidden>REFRESH VOTING STATUS ↻</button><div class="filters" id="filters">${CATS.map(c=>`<button class="filter ${c.slug===selected?'active':''}" data-cat="${c.slug}">${c.name} <small>${c.num}</small></button>`).join('')}</div><div class="cards" id="cards"></div><div class="voting-foot"><span>⚡ ONE VOTE PER CATEGORY • UP TO THREE VOTES</span><span>VOTING IS SUBJECT TO VERIFICATION.</span></div></section>
+<section class="public-results wrap" id="public-results" hidden aria-live="polite">
+  <div class="section-heading"><div><div class="tiny-label">OFFICIAL FINAL RESULTS</div><h2>THE FINAL <em>COUNT.</em></h2><p>Votes received by each finalist, grouped by category.</p></div></div>
+  <div id="results-charts" class="results-charts"></div>
+</section>
 <section class="how" id="how"><div class="wrap how-grid"><div><div class="tiny-label">HOW TO TAKE PART</div><h2>THREE CATEGORIES.<br/><em>YOUR CHOICE.</em></h2><p>No registration form. No long process. Just a few simple steps to support your favorite performer.</p></div><div class="steps"><div class="step"><b>01</b><div><h3>EXPLORE THE FINALISTS</h3><p>Browse all three categories and find your favorite performance.</p></div></div><div class="step"><b>02</b><div><h3>CHOOSE YOUR ONE FAVORITE</h3><p>You can vote for one finalist in each category.</p></div></div><div class="step"><b>03</b><div><h3>CONFIRM YOUR VOTE</h3><p>Pass the security check and cast your vote. You cannot change it afterward.</p></div></div></div></div></section><section class="end-banner"><div class="wrap"><span>DARE TO DAZZLE</span><h2>THE STAGE IS THEIRS.<br/><em>THE CHOICE IS YOURS.</em></h2></div></section></main>${footer()}
 <dialog class="vote-modal" id="vote-modal"><button class="modal-x" id="close-modal" aria-label="Close">✕</button><div class="tiny-label">✦ OFFICIAL PEOPLE'S CHOICE VOTE</div><h2>MAKE IT <em>COUNT.</em></h2><p id="modal-desc"></p><p class="warn">You may vote once per category. Your choice in this category is final.</p><div id="turnstile" class="turnstile"></div><button class="btn btn-orange modal-submit" id="submit-vote">CONFIRM MY VOTE ↗</button><p class="modal-feedback" id="modal-feedback" role="status"></p></dialog>`;
 
@@ -239,5 +243,72 @@ async function boot(){
     setNotice(`COULD NOT LOAD FINALISTS: ${err.message}. Please refresh to try again.`,'error');
   }
 }
+
+const publicResultsSection = document.getElementById('public-results');
+const publicResultsCharts = document.getElementById('results-charts');
+let publicResultRequest = 0;
+async function loadPublicResults() {
+  const requestId = ++publicResultRequest;
+  publicResultsSection.hidden = true;
+  publicResultsCharts.replaceChildren();
+  if (!configured || !supabase) return;
+  try {
+    // Server-side RPC returns null unless CLOSED and independently enabled by admin.
+    const { data, error } = await supabase.rpc('public_closed_vote_results');
+    if (requestId !== publicResultRequest || error || !Array.isArray(data)) return;
+    const groups = new Map();
+    for (const item of data) {
+      if (typeof item.category_slug !== 'string' || typeof item.finalist_name !== 'string') continue;
+      if (!groups.has(item.category_slug)) groups.set(item.category_slug, []);
+      groups.get(item.category_slug).push(item);
+    }
+    if (!groups.size) return;
+    for (const cat of CATS) {
+      const entries = groups.get(cat.slug) || [];
+      if (!entries.length) continue;
+      const total = entries.reduce((n, item) => n + Math.max(0, Number(item.vote_count) || 0), 0);
+      const max = Math.max(1, ...entries.map(item => Number(item.vote_count) || 0));
+      const panel = document.createElement('section');
+      panel.className = 'public-results-category';
+      const heading = document.createElement('h3');
+      heading.textContent = cat.name;
+      const subtitle = document.createElement('p');
+      subtitle.className = 'public-results-total';
+      subtitle.textContent = total.toLocaleString() + ' TOTAL VOTES';
+      panel.append(heading, subtitle);
+      for (const item of entries.sort((a,b) => (Number(b.vote_count)||0)-(Number(a.vote_count)||0))) {
+        const row = document.createElement('div');
+        row.className = 'public-result-row';
+        const details = document.createElement('div');
+        details.className = 'public-result-details';
+        const name = document.createElement('span');
+        name.textContent = item.finalist_name;
+        const count = document.createElement('strong');
+        count.textContent = (Number(item.vote_count)||0).toLocaleString() + ' VOTES';
+        details.append(name, count);
+        const track = document.createElement('div');
+        track.className = 'public-result-track';
+        track.setAttribute('role','img');
+        track.setAttribute('aria-label', item.finalist_name + ': ' + count.textContent);
+        const fill = document.createElement('div');
+        fill.className = 'public-result-bar';
+        fill.style.width = Math.max(0, Math.min(100, (Number(item.vote_count)||0) / max * 100)) + '%';
+        track.append(fill);
+        row.append(details, track);
+        panel.append(row);
+      }
+      publicResultsCharts.append(panel);
+    }
+    publicResultsSection.hidden = !publicResultsCharts.children.length;
+  } catch {
+    publicResultsSection.hidden = true;
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) void loadPublicResults();
+});
+window.addEventListener('focus', () => { void loadPublicResults(); });
+
 const script=document.createElement('script');script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';script.async=true;script.defer=true;document.head.appendChild(script);
 boot();
+void loadPublicResults();

@@ -97,6 +97,14 @@ root.innerHTML = `
             SAVE VOTING STATUS
           </button>
         </form>
+        <div class="chart-publish-control" id="chart-publish-control">
+          <p><strong>PUBLIC RESULTS BAR CHART</strong></p>
+          <p id="chart-publish-status">Chart is hidden from public voters.</p>
+          <button class="btn btn-outline" type="button" id="toggle-results-chart" disabled>
+            ENABLE RESULTS CHART
+          </button>
+          <p class="chart-publish-note">Only available after saving voting status as CLOSED. Closing voting alone never publishes results. Reopening voting automatically hides the chart.</p>
+        </div>
       </div>
 
       <div class="admin-panel">
@@ -214,6 +222,20 @@ ${footer()}
 
 let contestantCache = [];
 let voteCache = [];
+let currentEvent = null;
+function updateChartPublishControl() {
+  const button = document.getElementById('toggle-results-chart');
+  const label = document.getElementById('chart-publish-status');
+  const closed = currentEvent?.status === 'closed';
+  const enabled = closed && currentEvent?.show_results_chart === true;
+  button.disabled = !closed;
+  button.textContent = enabled ? 'HIDE RESULTS CHART' : 'ENABLE RESULTS CHART';
+  label.textContent = enabled
+    ? 'PUBLIC: Chart is visible on the voting website.'
+    : closed
+      ? 'PUBLIC: Chart is hidden. Enable it when you are ready.'
+      : 'PUBLIC: Chart is hidden. Save voting status as CLOSED first.';
+}
 function showDash(on) {
   document.getElementById('login').hidden = on;
   document.getElementById('dashboard').hidden = !on;
@@ -349,7 +371,7 @@ async function load() {
 
     supabase
       .from('voting_events')
-      .select('id,status,starts_at,ends_at')
+      .select('id,status,starts_at,ends_at,show_results_chart')
       .eq('id', 1)
       .maybeSingle()
   ]);
@@ -362,6 +384,8 @@ async function load() {
     );
   }
 
+  currentEvent = event;
+  updateChartPublishControl();
   contestantCache = contestants || [];
   document.getElementById("edit-category").innerHTML = (cats || []).map(c => `<option value="${safe(c.id)}">${safe(c.name)}</option>`).join("");
   const byId = new Map(
@@ -595,6 +619,35 @@ if (!configured) {
         button.textContent = 'SAVE VOTING STATUS';
       }
     };
+
+  document.getElementById('toggle-results-chart').onclick = async () => {
+    const button = document.getElementById('toggle-results-chart');
+    if (!currentEvent || currentEvent.status !== 'closed') {
+      setNotice('Close voting before publishing results.', 'error');
+      return;
+    }
+    const next = !currentEvent.show_results_chart;
+    button.disabled = true;
+    try {
+      if (!await authorized()) throw new Error('Organizer login required.');
+      // Database trigger prevents chart publication when the event is not CLOSED.
+      const { data, error } = await supabase.from('voting_events')
+        .update({ show_results_chart: next, updated_at: new Date().toISOString() })
+        .eq('id', 1).eq('status', 'closed')
+        .select('id,status,show_results_chart').maybeSingle();
+      if (error) throw error;
+      if (!data || data.status !== 'closed' || data.show_results_chart !== next) {
+        throw new Error('Could not change public chart visibility. Refresh and retry.');
+      }
+      await load();
+      setNotice(next ? 'PUBLIC RESULTS CHART ENABLED.' : 'PUBLIC RESULTS CHART HIDDEN.', 'success');
+    } catch (err) {
+      setNotice('Chart setting failed: ' + err.message, 'error');
+      await load().catch(() => {});
+    } finally {
+      updateChartPublishControl();
+    }
+  };
 
   // ========================================
   // ADD FINALIST
