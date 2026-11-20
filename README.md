@@ -132,3 +132,7 @@ In Control Room: save event status **CLOSED**, then click **ENABLE RESULTS CHART
 The public `public_closed_vote_results()` RPC enforces visibility server-side, so vote totals stay private before publication. It returns aggregated totals only, never voter identifiers. Test with an unauthenticated browser before going live. Existing admin-only results and PDF download remain available.
 
 **Deployment:** This feature requires the new SQL migration and a production frontend build copied to `docs/`; changing files in `src/` alone does not update the GitHub Pages site.
+
+## Results chart placement and live organizer counts
+
+Published public category charts appear at the **top of the public page**, directly after its navigation, but remain hidden until voting is CLOSED **and** Control Room explicitly enables them. The organizer Control Room also has a **private live category bar chart** populated by the existing admin-only `admin_vote_results()` function and refreshed every 15 seconds while the dashboard is visible. Live counts are never made available to public visitors.
