@@ -307,7 +307,6 @@ async function loadPublicResults() {
       tab.textContent = cat.name;
       publicResultsTabs.append(tab);
 
-      const total = entries.reduce((n, item) => n + Math.max(0, Number(item.vote_count) || 0), 0);
       const max = Math.max(1, ...entries.map(item => Number(item.vote_count) || 0));
       const panel = document.createElement('section');
       panel.className = 'public-results-category';
@@ -316,10 +315,7 @@ async function loadPublicResults() {
       panel.setAttribute('role', 'tabpanel');
       const heading = document.createElement('h3');
       heading.textContent = cat.name;
-      const subtitle = document.createElement('p');
-      subtitle.className = 'public-results-total';
-      subtitle.textContent = total.toLocaleString() + ' TOTAL VOTES';
-      panel.append(heading, subtitle);
+      panel.append(heading);
       for (const item of entries.sort((a,b) => (Number(b.vote_count)||0)-(Number(a.vote_count)||0))) {
         const row = document.createElement('div');
         row.className = 'public-result-row';
