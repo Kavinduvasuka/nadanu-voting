@@ -187,6 +187,9 @@ root.innerHTML = `
         Vote counts are restricted to authorized administrators
         and are not shown on the public voting page.
       </p>
+      <div class="tiny-label">LIVE VOTE BAR CHART — ADMIN ONLY</div>
+      <p class="chart-publish-note">Updates automatically every 15 seconds while Control Room is open. Public visitors cannot view these live counts.</p>
+      <div id="admin-live-charts" class="results-charts" aria-live="off"></div>
       <div id="results" class="results-list"></div>
 
       <button class="btn btn-outline" id="refresh">
@@ -223,6 +226,84 @@ ${footer()}
 let contestantCache = [];
 let voteCache = [];
 let currentEvent = null;
+let categoryNames = new Map();
+let liveChartRefreshing = false;
+
+function renderAdminLiveCharts(counts) {
+  const root = document.getElementById('admin-live-charts');
+  root.replaceChildren();
+  const categoryBuckets = new Map();
+  const contestById = new Map(contestantCache.map(c => [c.id, c]));
+  for (const item of counts || []) {
+    const finalist = contestById.get(item.contestant_id);
+    if (!finalist) continue;
+    const categoryId = finalist.category_id;
+    if (!categoryBuckets.has(categoryId)) categoryBuckets.set(categoryId, []);
+    categoryBuckets.get(categoryId).push({
+      name: item.name,
+      votes: Math.max(0, Number(item.vote_count) || 0)
+    });
+  }
+  for (const [categoryId, name] of categoryNames) {
+    const finalists = (categoryBuckets.get(categoryId) || [])
+      .sort((a,b) => b.votes - a.votes || a.name.localeCompare(b.name));
+    const total = finalists.reduce((n, f) => n + f.votes, 0);
+    const max = Math.max(1, ...finalists.map(f => f.votes));
+    const panel = document.createElement('section');
+    panel.className = 'public-results-category';
+    const heading = document.createElement('h3');
+    heading.textContent = name;
+    const totalLabel = document.createElement('p');
+    totalLabel.className = 'public-results-total';
+    totalLabel.textContent = total.toLocaleString() + ' TOTAL VOTES';
+    panel.append(heading, totalLabel);
+    for (const finalist of finalists) {
+      const row = document.createElement('div');
+      row.className = 'public-result-row';
+      const details = document.createElement('div');
+      details.className = 'public-result-details';
+      const label = document.createElement('span');
+      label.textContent = finalist.name;
+      const count = document.createElement('strong');
+      count.textContent = finalist.votes.toLocaleString() + ' VOTES';
+      details.append(label, count);
+      const track = document.createElement('div');
+      track.className = 'public-result-track';
+      track.setAttribute('role', 'img');
+      track.setAttribute('aria-label', finalist.name + ': ' + count.textContent);
+      const bar = document.createElement('div');
+      bar.className = 'public-result-bar';
+      bar.style.width = Math.min(100, finalist.votes / max * 100) + '%';
+      track.append(bar);
+      row.append(details, track);
+      panel.append(row);
+    }
+    if (!finalists.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No finalists in this category.';
+      panel.append(empty);
+    }
+    root.append(panel);
+  }
+}
+
+async function refreshAdminLiveChart() {
+  if (!configured || !supabase || liveChartRefreshing || document.hidden ||
+      document.getElementById('dashboard').hidden) return;
+  liveChartRefreshing = true;
+  try {
+    const {data, error} = await supabase.rpc('admin_vote_results');
+    if (error) throw error;
+    renderAdminLiveCharts(data || []);
+  } catch (error) {
+    // Keep the chart private and avoid presenting old results as live after errors.
+    document.getElementById('admin-live-charts').textContent =
+      'Live chart update unavailable. Use REFRESH RESULTS to retry.';
+  } finally {
+    liveChartRefreshing = false;
+  }
+}
+
 function updateChartPublishControl() {
   const button = document.getElementById('toggle-results-chart');
   const label = document.getElementById('chart-publish-status');
@@ -387,6 +468,7 @@ async function load() {
   currentEvent = event;
   updateChartPublishControl();
   contestantCache = contestants || [];
+  categoryNames = new Map((cats || []).map(c => [c.id, c.name]));
   document.getElementById("edit-category").innerHTML = (cats || []).map(c => `<option value="${safe(c.id)}">${safe(c.name)}</option>`).join("");
   const byId = new Map(
     (cats || []).map(c => [c.id, c.name])
@@ -445,9 +527,11 @@ async function load() {
     await supabase.rpc('admin_vote_results');
 
   if (re) {
+    document.getElementById('admin-live-charts').textContent = 'Live chart unavailable.';
     document.getElementById('results').textContent =
       'Results unavailable: ' + re.message;
   } else {
+    renderAdminLiveCharts(counts || []);
     document.getElementById('results').innerHTML =
       counts?.length
         ? counts.map(x => `
@@ -901,6 +985,12 @@ if (!configured) {
     () => load().catch(
       err => setNotice(err.message, 'error')
     );
+
+  // Refresh only the chart; never reset editor forms or voting controls while typing.
+  setInterval(() => { void refreshAdminLiveChart(); }, 15000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void refreshAdminLiveChart();
+  });
 
   // ========================================
   // RESTORE ADMIN SESSION
