@@ -82,6 +82,7 @@ const app=document.getElementById('app');
 app.innerHTML=`<div class="concert-atmosphere" aria-hidden="true"><div class="light-beam beam-left"></div><div class="light-beam beam-right"></div><div class="ambient-orb orb-one"></div><div class="ambient-orb orb-two"></div><div class="retro-grid"></div><div class="music-sparks"></div></div><div class="site-noise"></div><header class="topbar"><div class="wrap topbar-inner">${logo()}<nav><a class="nav-active" href="#performers">THE FINALISTS</a><a href="#how">HOW TO VOTE</a></nav><button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">☰</button></div></header>
 <main><section class="public-results wrap" id="public-results" hidden aria-live="polite">
   <div class="section-heading"><div><div class="tiny-label">OFFICIAL FINAL RESULTS</div><h2>THE FINAL <em>COUNT.</em></h2><p>Votes received by each finalist, grouped by category.</p></div></div>
+  <div id="public-results-tabs" class="public-results-tabs" role="tablist" aria-label="Voting results categories"></div>
   <div id="results-charts" class="results-charts"></div>
 </section>
 <section class="mini-hero" aria-label="Nadanu People's Choice"><div class="wrap mini-hero-inner"><div class="mini-hero-copy"><span class="mini-hero-kicker">NADANU 3.0 · GRAND FINALE 2026</span><h1>PEOPLE'S <em>CHOICE.</em></h1><p>Feel the Beat. Own the Stage. Your vote decides.</p></div><a class="mini-hero-link" href="#performers">EXPLORE FINALISTS <span aria-hidden="true">↗</span></a></div></section><section class="main-vote wrap" id="performers"><div class="section-heading"><div><div class="tiny-label">✦ THE MAIN EVENT / 2026</div><h2>MAKE YOUR <em>MARK.</em></h2><p>Pick your favorite act. Every vote counts.</p></div><div class="vote-status" id="vote-status"><span class="live-dot"></span> CHECKING VOTING STATUS</div></div><div id="notice" class="notice" hidden></div><button class="btn btn-outline" type="button" id="recheck-vote" hidden>REFRESH VOTING STATUS ↻</button><div class="filters" id="filters">${CATS.map(c=>`<button class="filter ${c.slug===selected?'active':''}" data-cat="${c.slug}">${c.name} <small>${c.num}</small></button>`).join('')}</div><div class="cards" id="cards"></div><div class="voting-foot"><span>⚡ ONE VOTE PER CATEGORY • UP TO THREE VOTES</span><span>VOTING IS SUBJECT TO VERIFICATION.</span></div></section>
@@ -246,14 +247,46 @@ async function boot(){
 
 const publicResultsSection = document.getElementById('public-results');
 const publicResultsCharts = document.getElementById('results-charts');
+const publicResultsTabs = document.getElementById('public-results-tabs');
 let publicResultRequest = 0;
+let selectedResultsCategory = CATS[0].slug;
+
+function selectResultsCategory(slug) {
+  selectedResultsCategory = slug;
+  for (const tab of publicResultsTabs.querySelectorAll('[data-result-cat]')) {
+    const active = tab.dataset.resultCat === slug;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-selected', String(active));
+    tab.tabIndex = active ? 0 : -1;
+  }
+  for (const panel of publicResultsCharts.querySelectorAll('[data-result-panel]')) {
+    panel.hidden = panel.dataset.resultPanel !== slug;
+  }
+}
+publicResultsTabs.addEventListener('click', event => {
+  const button = event.target.closest('[data-result-cat]');
+  if (button) selectResultsCategory(button.dataset.resultCat);
+});
+publicResultsTabs.addEventListener('keydown', event => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  const tabs = [...publicResultsTabs.querySelectorAll('[data-result-cat]')];
+  if (!tabs.length) return;
+  const current = Math.max(0, tabs.findIndex(t => t.dataset.resultCat === selectedResultsCategory));
+  const index = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+    : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+  event.preventDefault();
+  selectResultsCategory(tabs[index].dataset.resultCat);
+  tabs[index].focus();
+});
 async function loadPublicResults() {
   const requestId = ++publicResultRequest;
   publicResultsSection.hidden = true;
+  publicResultsTabs.replaceChildren();
   publicResultsCharts.replaceChildren();
   if (!configured || !supabase) return;
   try {
-    // Server-side RPC returns null unless CLOSED and independently enabled by admin.
+    // Unpublished results remain private: the server RPC returns null unless
+    // voting is CLOSED AND the organizer explicitly enables result publication.
     const { data, error } = await supabase.rpc('public_closed_vote_results');
     if (requestId !== publicResultRequest || error || !Array.isArray(data)) return;
     const groups = new Map();
@@ -262,14 +295,25 @@ async function loadPublicResults() {
       if (!groups.has(item.category_slug)) groups.set(item.category_slug, []);
       groups.get(item.category_slug).push(item);
     }
-    if (!groups.size) return;
     for (const cat of CATS) {
       const entries = groups.get(cat.slug) || [];
       if (!entries.length) continue;
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = 'public-results-tab';
+      tab.dataset.resultCat = cat.slug;
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-controls', 'results-panel-' + cat.slug);
+      tab.textContent = cat.name;
+      publicResultsTabs.append(tab);
+
       const total = entries.reduce((n, item) => n + Math.max(0, Number(item.vote_count) || 0), 0);
       const max = Math.max(1, ...entries.map(item => Number(item.vote_count) || 0));
       const panel = document.createElement('section');
       panel.className = 'public-results-category';
+      panel.id = 'results-panel-' + cat.slug;
+      panel.dataset.resultPanel = cat.slug;
+      panel.setAttribute('role', 'tabpanel');
       const heading = document.createElement('h3');
       heading.textContent = cat.name;
       const subtitle = document.createElement('p');
@@ -288,7 +332,7 @@ async function loadPublicResults() {
         details.append(name, count);
         const track = document.createElement('div');
         track.className = 'public-result-track';
-        track.setAttribute('role','img');
+        track.setAttribute('role', 'img');
         track.setAttribute('aria-label', item.finalist_name + ': ' + count.textContent);
         const fill = document.createElement('div');
         fill.className = 'public-result-bar';
@@ -299,7 +343,12 @@ async function loadPublicResults() {
       }
       publicResultsCharts.append(panel);
     }
-    publicResultsSection.hidden = !publicResultsCharts.children.length;
+    if (!publicResultsTabs.children.length) return;
+    if (!publicResultsTabs.querySelector('[data-result-cat="' + selectedResultsCategory + '"]')) {
+      selectedResultsCategory = publicResultsTabs.firstElementChild.dataset.resultCat;
+    }
+    selectResultsCategory(selectedResultsCategory);
+    publicResultsSection.hidden = false;
   } catch {
     publicResultsSection.hidden = true;
   }
